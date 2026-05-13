@@ -4,8 +4,8 @@ Telegram-бот для канала @AiContentCreatorUZ
 - Узбекский (латиница)
 - Инсайдерский тон
 - 6 видов CTA, чередуются
-- Keep-alive пинг каждые 10 минут (защита от засыпания Railway)
-- Тестовый пост при запуске
+- Keep-alive пинг каждые 10 минут
+- Без Markdown форматирования (чтобы Telegram не ломался)
 """
 
 import os
@@ -14,7 +14,6 @@ import logging
 from datetime import datetime, timezone, timedelta
 import requests
 from telegram import Bot
-from telegram.constants import ParseMode
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
@@ -31,7 +30,6 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 UNSPLASH_ACCESS_KEY = os.getenv("UNSPLASH_ACCESS_KEY", "")
 INSTAGRAM_USERNAME = "@umishka_abdukarimova"
 
-# Тестовая публикация при запуске (поставь False после первого успешного поста)
 PUBLISH_ON_STARTUP = True
 
 # ============================================
@@ -45,7 +43,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ============================================
-# РАСПИСАНИЕ ТЕМ
+# РАСПИСАНИЕ
 # ============================================
 
 POST_SCHEDULE = {
@@ -104,13 +102,15 @@ def get_cta() -> str:
 # ============================================
 
 POST_PROMPTS = {
-    "news": """Sen AI-soha bilan chuqur tanish odamsan. Kanalingda yangiliklarni do'stona, insayder ohangda yozasan.
+    "news": """Sen AI-soha bilan chuqur tanish odamsan. Insayder ohangda yozasan.
 
-Bugun yangilik posti yoz O'zbek tilida (LATIN harflarda).
+Yangilik posti yoz O'zbek tilida (LATIN harflarda).
 
 Mavzu: AI-soha yangiligi yoki trendi.
 
-OHANG: "Tasavvur qiling, endi shunday qilish mumkin..." yoki "Yangi narsa chiqdi..." — insayder ohang. EMAS o'qituvchi ohangda.
+OHANG: "Tasavvur qiling..." yoki "Yangi narsa chiqdi..." — insayder ohang. EMAS o'qituvchi ohangda.
+
+MUHIM: Markdown formatlash ishlatma (yulduzcha, pastki chiziq yo'q). Faqat oddiy matn va emoji.
 
 STRUKTURA:
 - Sarlavha (1 emoji)
@@ -120,11 +120,13 @@ STRUKTURA:
 
 Maksimum 600 belgi. Faqat latin.""",
 
-    "insight": """Sen AI va reklama sohasida insayder mutaxassissan.
+    "insight": """Sen AI va reklama insayder mutaxassisisan.
 
-Bugun insayt posti yoz O'zbek tilida (LATIN harflarda).
+Insayt posti yoz O'zbek tilida (LATIN harflarda).
 
-OHANG: "Sezganmisiz..." yoki "Qiziq narsa..." — kuzatuv tarzida.
+OHANG: "Sezganmisiz..." yoki "Qiziq narsa..." — kuzatuv.
+
+MUHIM: Markdown formatlash ishlatma. Faqat oddiy matn va emoji.
 
 STRUKTURA:
 - Sarlavha
@@ -136,11 +138,14 @@ Maksimum 600 belgi. Faqat latin.""",
 
     "prompt_image": """Sen AI-rasm generatsiyasi mutaxassisisan.
 
-Midjourney yoki Flux uchun foydali prompt ulashuvchi post yoz O'zbek tilida (LATIN harflarda).
+Midjourney yoki Flux uchun prompt ulashuvchi post yoz O'zbek tilida (LATIN harflarda).
+
+MUHIM: Markdown formatlash ishlatma (yulduzcha, pastki chiziq, kod blok belgilari yo'q). Promptni oddiy matn sifatida yoz, tirnoq ichida.
 
 STRUKTURA:
 - Sarlavha
-- Prompt (ingliz tilida, kod blokida)
+- Qisqa kirish
+- Prompt: "prompt matni shu yerda"
 - Qachon ishlatish
 - 2-3 hashtag
 
@@ -150,9 +155,11 @@ Maksimum 700 belgi. Faqat latin.""",
 
 Video uchun prompt ulashuvchi post yoz O'zbek tilida (LATIN harflarda).
 
+MUHIM: Markdown formatlash ishlatma. Promptni tirnoq ichida yoz.
+
 STRUKTURA:
 - Sarlavha
-- Prompt (ingliz tilida, kod blokida)
+- Prompt: "prompt matni"
 - Tushuntirish
 - 2-3 hashtag
 
@@ -162,10 +169,12 @@ Maksimum 700 belgi. Faqat latin.""",
 
 Reklama uchun prompt ulashuvchi post yoz O'zbek tilida (LATIN harflarda).
 
+MUHIM: Markdown formatlash ishlatma. Promptni tirnoq ichida yoz.
+
 STRUKTURA:
 - Sarlavha
-- Prompt (ingliz tilida, kod blokida)
-- Qanday natija
+- Prompt: "prompt matni"
+- Natija qanday
 - 2-3 hashtag
 
 Maksimum 700 belgi. Faqat latin.""",
@@ -174,7 +183,9 @@ Maksimum 700 belgi. Faqat latin.""",
 
 Lifhak posti yoz O'zbek tilida (LATIN harflarda).
 
-OHANG: shaxsiy tajriba tarzida.
+OHANG: shaxsiy tajriba.
+
+MUHIM: Markdown formatlash ishlatma.
 
 STRUKTURA:
 - Sarlavha
@@ -189,11 +200,11 @@ Maksimum 600 belgi. Faqat latin.""",
 
 AI-agentlar haqida post yoz O'zbek tilida (LATIN harflarda).
 
-MUHIM: HALI o'zingni AI-bot deb tanitma.
+MUHIM: HALI o'zingni AI-bot deb tanitma. Markdown formatlash ishlatma.
 
 STRUKTURA:
 - Sarlavha
-- AI-agent nima (oddiy)
+- AI-agent nima
 - Biznesda nima qila oladi
 - 2-3 hashtag
 
@@ -203,7 +214,7 @@ Maksimum 700 belgi. Faqat latin.""",
 
 Avtomatlashtirish haqida post yoz O'zbek tilida (LATIN harflarda).
 
-MUHIM: HALI o'zingni bot deb tanitma.
+MUHIM: HALI o'zingni bot deb tanitma. Markdown formatlash ishlatma.
 
 STRUKTURA:
 - Sarlavha
@@ -219,6 +230,8 @@ Keys-post yoz O'zbek tilida (LATIN harflarda).
 
 OHANG: hikoya tarzida.
 
+MUHIM: Markdown formatlash ishlatma.
+
 STRUKTURA:
 - Sarlavha
 - Muammo
@@ -228,12 +241,14 @@ STRUKTURA:
 
 Maksimum 800 belgi. Faqat latin.""",
 
-    "weekend_lifehack": """Yengil, ijodiy post yoz O'zbek tilida (LATIN harflarda).
+    "weekend_lifehack": """Yengil ijodiy post yoz O'zbek tilida (LATIN harflarda).
 
-OHANG: do'stona, dam olish kuni.
+OHANG: do'stona.
+
+MUHIM: Markdown formatlash ishlatma.
 
 STRUKTURA:
-- Sarlavha (yengil emoji)
+- Sarlavha
 - Asosiy fikr (3-4 gap)
 - 2-3 hashtag
 
@@ -242,6 +257,8 @@ Maksimum 500 belgi. Faqat latin.""",
     "easy_post": """Yengil yakshanba posti yoz O'zbek tilida (LATIN harflarda).
 
 OHANG: iliq, samimiy.
+
+MUHIM: Markdown formatlash ishlatma.
 
 STRUKTURA:
 - Sarlavha
@@ -252,11 +269,13 @@ Maksimum 400 belgi. Faqat latin.""",
 
     "tool_recommendation": """AI-vosita haqida tavsiya posti yoz O'zbek tilida (LATIN harflarda).
 
-OHANG: tavsiya tarzida.
+OHANG: tavsiya.
+
+MUHIM: Markdown formatlash ishlatma.
 
 STRUKTURA:
 - Sarlavha
-- Vosita nomi va nima qiladi
+- Vosita nomi
 - Nima uchun foydali
 - 2-3 hashtag
 
@@ -265,7 +284,7 @@ Maksimum 600 belgi. Faqat latin.""",
 
 
 # ============================================
-# ГЕНЕРАЦИЯ ТЕКСТА
+# ГЕНЕРАЦИЯ
 # ============================================
 
 def generate_post(post_type: str) -> str:
@@ -311,14 +330,13 @@ def get_image_url(post_type: str) -> str:
 # ============================================
 
 def get_post_type(time_of_day: str) -> str:
-    """Определяет тип поста на основе дня недели Ташкента."""
     tashkent_tz = timezone(timedelta(hours=5))
     weekday = datetime.now(tashkent_tz).weekday()
     return POST_SCHEDULE.get((weekday, time_of_day), "news")
 
 
 # ============================================
-# ПУБЛИКАЦИЯ
+# ПУБЛИКАЦИЯ (БЕЗ MARKDOWN!)
 # ============================================
 
 async def publish_post(time_of_day: str = "morning"):
@@ -333,18 +351,21 @@ async def publish_post(time_of_day: str = "morning"):
         
         bot = Bot(token=BOT_TOKEN)
         
+        # Caption в Telegram ограничен 1024 символа
+        if len(text) > 1024:
+            text = text[:1020] + "..."
+        
         if image_url:
+            # БЕЗ parse_mode — простой текст
             await bot.send_photo(
                 chat_id=CHANNEL_USERNAME,
                 photo=image_url,
-                caption=text,
-                parse_mode=ParseMode.MARKDOWN
+                caption=text
             )
         else:
             await bot.send_message(
                 chat_id=CHANNEL_USERNAME,
-                text=text,
-                parse_mode=ParseMode.MARKDOWN
+                text=text
             )
         
         logger.info("✅ Пост опубликован!")
@@ -362,11 +383,10 @@ async def publish_evening():
 
 
 # ============================================
-# KEEP-ALIVE ПИНГ — защита от засыпания Railway
+# KEEP-ALIVE
 # ============================================
 
 async def keep_alive_ping():
-    """Каждые 10 минут пишет в логи что бот жив. Не даёт Railway усыпить."""
     tashkent_tz = timezone(timedelta(hours=5))
     current_time = datetime.now(tashkent_tz).strftime("%H:%M:%S")
     logger.info(f"💚 Keep-alive ping — бот активен. Ташкент: {current_time}")
@@ -377,7 +397,6 @@ async def keep_alive_ping():
 # ============================================
 
 async def main():
-    # Тестовая публикация при запуске
     if PUBLISH_ON_STARTUP:
         logger.info("🧪 Тестовая публикация при запуске...")
         tashkent_tz = timezone(timedelta(hours=5))
@@ -385,10 +404,8 @@ async def main():
         time_of_day = "morning" if current_hour < 14 else "evening"
         await publish_post(time_of_day)
     
-    # Регулярное расписание
     scheduler = AsyncIOScheduler(timezone="Asia/Tashkent")
     
-    # Утром 8:00
     scheduler.add_job(
         publish_morning,
         CronTrigger(hour=8, minute=0),
@@ -396,7 +413,6 @@ async def main():
         replace_existing=True
     )
     
-    # Вечером 19:00
     scheduler.add_job(
         publish_evening,
         CronTrigger(hour=19, minute=0),
@@ -404,7 +420,6 @@ async def main():
         replace_existing=True
     )
     
-    # Keep-alive каждые 10 минут (от засыпания Railway)
     scheduler.add_job(
         keep_alive_ping,
         IntervalTrigger(minutes=10),
