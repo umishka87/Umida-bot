@@ -1,8 +1,8 @@
 """
 Telegram-бот для канала @AiContentCreatorUZ
-- 2 поста в день
+- 3 поста в день: 7:00 (приветствие), 13:00 (утро), 00:00 (вечер)
 - Серия Midjourney на 9 дней (14-22 мая 2026)
-- Включает урок про написание промптов и бан-лист
+- Опросы раз в 2-3 дня
 - После — обычные темы БЕЗ промптов и БЕЗ агентов
 """
 
@@ -28,7 +28,7 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 UNSPLASH_ACCESS_KEY = os.getenv("UNSPLASH_ACCESS_KEY", "")
 INSTAGRAM_USERNAME = "@umishka_abdukarimova"
 
-PUBLISH_ON_STARTUP = True
+PUBLISH_ON_STARTUP = False
 
 SERIES_START_DATE = date(2026, 5, 14)
 SERIES_DAYS = 9
@@ -129,18 +129,142 @@ IMAGE_THEMES = {
 # ============================================
 
 CTA_LIST = [
+    # === Instagram и бизнес ===
     "\n\n📸 Mening barcha ishlarim Instagram'da: {ig}",
-    "\n\n💼 Brendingiz uchun AI-video kerakmi? Umidaga yozing: {ig}",
-    "\n\n🔥 100 obunachiga yetganda — birinchi sirni ochaman. Do'stlaringizga ulashing!",
-    "\n\n💾 Postni saqlab qo'ying — kerak bo'ladi.",
-    "\n\n🚀 AI bilan ijod qilayotganlar uchun kanal. Obuna bo'ling.",
+    "\n\n💼 Brendingiz uchun AI-video kerakmi? Umidaga Instagram'da yozing: {ig}",
     "\n\n🎬 Umida brendlar uchun AI-reklamalar yaratadi. Instagram: {ig}",
+    
+    # === Рост канала / 100 подписчиков ===
+    "\n\n🔥 100 obunachiga yetganda — birinchi sirni ochaman. Do'stlaringizga ulashing!",
+    "\n\n🌟 Kanalga obuna bo'ling — har kuni AI haqida yangi narsa.",
+    "\n\n🚀 AI bilan ijod qilayotganlar uchun kanal. Obuna bo'ling.",
+    
+    # === Поделиться (главная просьба Умиды) ===
+    "\n\n🤝 Sun'iy intellekt bilan qiziquvchi do'stingiz bormi? Unga shu kanalni yuboring.",
+    "\n\n👥 Bu post sizga foydali bo'ldimi? Do'stingizga ham ulashing.",
+    "\n\n💼 Hamkasbingiz biznes egasimi? Shu postni unga yuboring — AI bilan vaqt va pul tejashga yordam beradi.",
+    "\n\n📤 Bu postni ish chatingizga tashlang — hamkasblarga ham foydali bo'lishi mumkin.",
+    
+    # === Сохранения ===
+    "\n\n💾 Postni saqlab qo'ying — kerak bo'ladi.",
+    
+    # === Реакции ===
+    "\n\n🔥 Foydali bo'lsa — reaksiya qo'ying. Yoqsa — yurakcha bosing ❤️",
+    "\n\n❤️ Yoqdimi? Yurakcha bosib qo'ying — bu menga muhim.",
+    
+    # === Комментарии ===
+    "\n\n💬 Savollar bormi? Sharhlarda yozing — javob beraman.",
+    "\n\n🎯 Bugun yangi narsa bilib oldingizmi? Sharhlarda yozing!",
 ]
 
 
 def get_cta() -> str:
     cta = random.choice(CTA_LIST)
-    return cta.format(ig=INSTAGRAM_USERNAME)
+    # Безопасный формат - подставляем Instagram только если есть placeholder
+    if "{ig}" in cta:
+        return cta.format(ig=INSTAGRAM_USERNAME)
+    return cta
+
+
+# ============================================
+# УТРЕННИЕ ПРИВЕТСТВИЯ (7:00) — 7 шаблонов по дням недели
+# ============================================
+# weekday(): 0=Понедельник, 1=Вторник, ..., 6=Воскресенье
+
+MORNING_GREETINGS = {
+    0: """🌅 Xayrli tong! ☕
+
+Yangi hafta boshlanyapti 💪
+Bugun yoki bu hafta uchun asosiy maqsadingiz nima?
+
+Sharhlarda yozing — bir-birimizga ilhom beraylik 🙌
+
+Kun yaxshi o'tsin! 🌟""",
+
+    1: """🌅 Xayrli tong! ☀️
+
+Bugun nima ichdingiz — kofemi yoki choymi? ☕🍵
+
+Sharhlarda javob bering — qiziq, kim ko'p chiqadi 😊
+
+Kuningiz mazmunli o'tsin! ✨""",
+
+    2: """🌅 Xayrli tong! 🌸
+
+Bugun qanday his qilyapsiz — 1 dan 10 gacha?
+Halol javob bering 😄
+
+Sharhlarda raqamingizni yozing 📊
+
+Kuningiz yorug' o'tsin! 🌟""",
+
+    3: """🌅 Xayrli tong! 💼
+
+Ish kuni... Eng zerikarli yoki eng yoqimsiz vazifangiz nima?
+😅
+
+Sharhlarda yozing — birga kulamiz 😄
+Hafta oxiri yaqin! 🎯""",
+
+    4: """🌅 Xayrli juma! 🕌
+
+Juma muborak! 🤲
+
+Hafta tugayapti. Dam olish kunlariga qanday rejalaringiz bor?
+
+Sharhlarda yozing 🌟
+
+Juma kuningiz baroakali bo'lsin! ✨""",
+
+    5: """🌅 Xayrli tong! 🌴
+
+Shanba — dam olish kuni!
+Ertalab nimani yedingiz? 🍞🥐🍳
+
+Sharhlarda yozing — hammasi qiziq 😋
+
+Kun ajoyib o'tsin! 🌟""",
+
+    6: """🌅 Xayrli yakshanba! 🌞
+
+Bugun rejalaringiz qanaqa — dam olasizmi yoki ish bilan bandmisiz?
+
+Sharhlarda yozing 💬
+
+Yangi hafta uchun kuch yig'ing! 💪""",
+}
+
+
+# ============================================
+# ОПРОСЫ — 6 разных опросов, чередуются
+# ============================================
+
+POLLS = [
+    {
+        "question": "AI'dan kunlik foydalanasizmi? 🤖",
+        "options": ["✅ Ha, har kuni", "🤔 Ba'zan", "❌ Hech qachon"]
+    },
+    {
+        "question": "Yoshingiz nechada? 👋",
+        "options": ["20 gacha", "20-30", "30-40", "40+"]
+    },
+    {
+        "question": "AI'ning qaysi yo'nalishi sizga qiziq? 🎯",
+        "options": ["🎨 Rasmlar", "🎬 Video", "📝 Matn", "💼 Biznes uchun"]
+    },
+    {
+        "question": "AI odamlarni ishdan qoldiradi deb o'ylaysizmi? 🤔",
+        "options": ["😨 Ha, ishonchli", "😎 Yo'q", "🤷 Bilmadim"]
+    },
+    {
+        "question": "AI bilan ishlashni o'rganmoqchimisiz? 📚",
+        "options": ["🔥 Ha, juda", "😐 Balki", "😴 Yo'q"]
+    },
+    {
+        "question": "Sizga yana qaysi mavzu haqida yozish kerak? 💡",
+        "options": ["🎬 Qanday video yaratish", "🎨 Rasm generatsiyasi", "💰 AI bilan pul ishlash", "📱 Instagram va AI"]
+    },
+]
 
 
 # ============================================
@@ -150,14 +274,34 @@ def get_cta() -> str:
 GLOBAL_RULE = """
 
 QAT'IY QOIDALAR (HAR DOIM AMAL QILING):
-1. HECH QACHON tayyor prompt yozmang — bu Umidaning shaxsiy mulki.
-2. HECH QACHON "Prompt:" deb boshlanuvchi matn yozmang.
-3. HECH QACHON ingliz tilida tirnoq ichida AI uchun ko'rsatma bermang.
-4. Misol kerak bo'lsa — UMUMIY tushuncha bering, aniq prompt EMAS.
-5. Markdown formatlash YO'Q (yulduzcha, pastki chiziq).
-6. Kod blok belgilarini ishlatmang.
-7. Faqat O'zbek tili LATIN harflarda.
-8. AI-agentlar haqida HECH NARSA yozmang.
+
+1. UZUNLIK CHEKLOVI — ENG MUHIM!
+Post MAKSIMUM 850 belgi (probellarga qo'shgan holda).
+Post Telegram'da rasm ostida chiqadi — caption chegarasi 1024 belgi.
+CTA va hashtag uchun 150 belgi qoldiring.
+HECH QACHON 850 belgidan oshmasin. Qisqa, aniq, mazmunli yozing.
+Agar mavzu katta bo'lsa — eng muhimini tanlang, qolganini tashlang.
+
+2. KONTENT QOIDALARI:
+- HECH QACHON tayyor prompt yozmang — bu Umidaning shaxsiy mulki.
+- HECH QACHON "Prompt:" deb boshlanuvchi matn yozmang.
+- HECH QACHON ingliz tilida tirnoq ichida AI uchun ko'rsatma bermang.
+- Misol kerak bo'lsa — UMUMIY tushuncha bering, aniq prompt EMAS.
+
+3. FORMATLASH:
+- Markdown formatlash YO'Q (yulduzcha, pastki chiziq).
+- Kod blok belgilarini ishlatmang.
+- Faqat O'zbek tili LATIN harflarda.
+
+4. MAVZULAR:
+- AI-agentlar haqida HECH NARSA yozmang.
+
+5. STRUKTURA:
+- Qisqa sarlavha
+- Asosiy mazmun (3-5 qisqa abzats)
+- 2-3 hashtag
+
+YANA ESLATMA: post 850 belgidan oshmasligi shart!
 """
 
 
@@ -769,8 +913,27 @@ async def publish_post(time_of_day: str = "morning"):
         
         bot = Bot(token=BOT_TOKEN)
         
+        # УМНАЯ обрезка по предложениям (не обрывает на середине слова)
         if len(text) > 1024:
-            text = text[:1020] + "..."
+            # Обрезаем до 1010 чтобы был запас
+            truncated = text[:1010]
+            
+            # Ищем последний знак конца предложения
+            last_dot = max(
+                truncated.rfind('.'),
+                truncated.rfind('!'),
+                truncated.rfind('?'),
+                truncated.rfind('\n\n')
+            )
+            
+            if last_dot > 500:  # если нашли осмысленную точку
+                text = truncated[:last_dot + 1]
+            else:
+                # обрезаем по последнему слову
+                last_space = truncated.rfind(' ')
+                text = truncated[:last_space] + '.'
+            
+            logger.warning(f"⚠️ Текст обрезан до {len(text)} символов")
         
         if image_url:
             await bot.send_photo(
@@ -798,6 +961,53 @@ async def publish_evening():
     await publish_post("evening")
 
 
+# ============================================
+# УТРЕННЕЕ ПРИВЕТСТВИЕ (7:00) — без картинки
+# ============================================
+
+async def publish_greeting():
+    """Публикует короткое приветствие в 7:00 по Ташкенту."""
+    try:
+        tashkent_tz = timezone(timedelta(hours=5))
+        weekday = datetime.now(tashkent_tz).weekday()
+        
+        greeting = MORNING_GREETINGS.get(weekday, MORNING_GREETINGS[0])
+        
+        bot = Bot(token=BOT_TOKEN)
+        await bot.send_message(
+            chat_id=CHANNEL_USERNAME,
+            text=greeting
+        )
+        
+        logger.info(f"✅ Утреннее приветствие опубликовано (день {weekday})")
+        
+    except Exception as e:
+        logger.error(f"❌ Ошибка приветствия: {e}")
+
+
+# ============================================
+# ОПРОС (3 раза в неделю — Пн, Ср, Пт в 20:00)
+# ============================================
+
+async def publish_poll():
+    """Публикует опрос (раз в 2-3 дня)."""
+    try:
+        poll = random.choice(POLLS)
+        
+        bot = Bot(token=BOT_TOKEN)
+        await bot.send_poll(
+            chat_id=CHANNEL_USERNAME,
+            question=poll["question"],
+            options=poll["options"],
+            is_anonymous=True
+        )
+        
+        logger.info(f"✅ Опрос опубликован: {poll['question']}")
+        
+    except Exception as e:
+        logger.error(f"❌ Ошибка опроса: {e}")
+
+
 async def keep_alive_ping():
     tashkent_tz = timezone(timedelta(hours=5))
     current_time = datetime.now(tashkent_tz).strftime("%H:%M:%S")
@@ -818,6 +1028,15 @@ async def main():
     
     scheduler = AsyncIOScheduler(timezone="Asia/Tashkent")
     
+    # Утреннее приветствие в 7:00 (без картинки, с вопросом)
+    scheduler.add_job(
+        publish_greeting,
+        CronTrigger(hour=7, minute=0),
+        id="morning_greeting",
+        replace_existing=True
+    )
+    
+    # Основной утренний пост (фактически в 13:00 Ташкент = 8:00 UTC)
     scheduler.add_job(
         publish_morning,
         CronTrigger(hour=8, minute=0),
@@ -825,6 +1044,7 @@ async def main():
         replace_existing=True
     )
     
+    # Основной вечерний пост (фактически в 00:00 Ташкент = 19:00 UTC)
     scheduler.add_job(
         publish_evening,
         CronTrigger(hour=19, minute=0),
@@ -832,6 +1052,15 @@ async def main():
         replace_existing=True
     )
     
+    # Опросы 3 раза в неделю: Пн, Ср, Пт в 20:00 Ташкент (15:00 UTC)
+    scheduler.add_job(
+        publish_poll,
+        CronTrigger(day_of_week="mon,wed,fri", hour=15, minute=0),
+        id="poll",
+        replace_existing=True
+    )
+    
+    # Keep-alive каждые 10 минут
     scheduler.add_job(
         keep_alive_ping,
         IntervalTrigger(minutes=10),
@@ -840,7 +1069,7 @@ async def main():
     )
     
     scheduler.start()
-    logger.info("🚀 Бот запущен. Серия Midjourney 9 дней (14-22 мая).")
+    logger.info("🚀 Бот запущен. 3 поста в день + опросы 3 раза в неделю.")
     
     while True:
         await asyncio.sleep(60)
