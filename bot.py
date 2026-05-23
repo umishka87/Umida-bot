@@ -1,9 +1,19 @@
 """
 Telegram-бот для канала @AiContentCreatorUZ
-- 3 поста в день: 7:00 (приветствие), 13:00 (утро), 00:00 (вечер)
-- Серия Midjourney на 9 дней (14-22 мая 2026)
-- Опросы раз в 2-3 дня
-- После — обычные темы БЕЗ промптов и БЕЗ агентов
+ВЕРСИЯ 2.0 — обновлённая
+
+- 4 поста в день:
+  7:00 (приветствие) - 2:00 UTC
+  13:00 (серия) - 8:00 UTC
+  17:00 (AI новости) - 12:00 UTC
+  19:00 (серия) - 14:00 UTC
+- Опросы 3 раза в неделю (Пн, Ср, Пт в 20:00 = 15:00 UTC)
+- Серии: CRM (2 поста) → AI-видео (14 постов) → обычные темы
+- Разговорный узбекский без русских слов, с "Hurmatli"
+- НЕ писать про день недели в приветствиях
+- Усиленный запрет Markdown
+- 8-10 узбекских хештегов на пост
+- Instagram ссылка в CTA
 """
 
 import os
@@ -26,12 +36,18 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 CHANNEL_USERNAME = "@AiContentCreatorUZ"
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 UNSPLASH_ACCESS_KEY = os.getenv("UNSPLASH_ACCESS_KEY", "")
+
 INSTAGRAM_USERNAME = "@umishka_abdukarimova"
+INSTAGRAM_URL = "https://www.instagram.com/umishka_abdukarimova?utm_source=qr"
 
 PUBLISH_ON_STARTUP = False
 
-SERIES_START_DATE = date(2026, 5, 14)
-SERIES_DAYS = 9
+# После серии Midjourney (закончилась 22 мая) начинается серия CRM с 23 мая
+SERIES_CRM_START = date(2026, 5, 23)
+SERIES_CRM_DAYS = 2  # 2 поста = 1 день (утром и вечером)
+
+SERIES_VIDEO_START = date(2026, 5, 24)
+SERIES_VIDEO_DAYS = 7  # 7 дней × 2 поста = 14 постов
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -39,204 +55,206 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
 # ============================================
-# СЕРИЯ MIDJOURNEY (9 дней × 2 поста = 18 постов)
+# СЕРИЯ CRM (2 поста)
 # ============================================
 
-MIDJOURNEY_SERIES = {
-    # День 1 (14 мая) — Знакомство
-    (0, "morning"): "mj_intro",
-    (0, "evening"): "mj_business",
-    # День 2 (15 мая) — Реклама и итог
-    (1, "morning"): "mj_advertising",
-    (1, "evening"): "mj_summary",
-    # День 3 (16 мая) — НОВЫЕ УРОКИ про промпты
-    (2, "morning"): "mj_prompts_howto",
-    (2, "evening"): "mj_banned_words",
-    # День 4 (17 мая) — Версии
-    (3, "morning"): "mj_versions",
-    (3, "evening"): "mj_niji",
-    # День 5 (18 мая) — Режимы
-    (4, "morning"): "mj_stealth",
-    (4, "evening"): "mj_modes",
-    # День 6 (19 мая) — Платформа и параметры
-    (5, "morning"): "mj_discord_web",
-    (5, "evening"): "mj_parameters",
-    # День 7 (20 мая) — Стили и Instagram
-    (6, "morning"): "mj_styles",
-    (6, "evening"): "mj_instagram",
-    # День 8 (21 мая) — Ошибки
-    (7, "morning"): "mj_mistakes",
-    (7, "evening"): "mj_tips",
-    # День 9 (22 мая) — Итоги
-    (8, "morning"): "mj_advanced",
-    (8, "evening"): "mj_week_summary",
+CRM_SERIES = {
+    (0, "morning"): "crm_intro",       # 23 мая утром - что такое CRM + AI
+    (0, "evening"): "crm_implement",   # 23 мая вечером - 12 шагов + продажа
 }
 
+
 # ============================================
-# РАСПИСАНИЕ ПОСЛЕ СЕРИИ (БЕЗ агентов, БЕЗ промптов!)
+# СЕРИЯ AI-ВИДЕО (14 постов = 7 дней × 2)
 # ============================================
 
-POST_SCHEDULE = {
-    (0, "morning"): "news",
-    (0, "evening"): "reflection",
-    (1, "morning"): "insight",
-    (1, "evening"): "tool_review",
-    (2, "morning"): "news",
-    (2, "evening"): "trend",
-    (3, "morning"): "insight",
-    (3, "evening"): "tool_review",
-    (4, "morning"): "news",
-    (4, "evening"): "story",
-    (5, "morning"): "case",
-    (5, "evening"): "weekend_reflection",
-    (6, "morning"): "easy_post",
-    (6, "evening"): "tool_review",
+VIDEO_SERIES = {
+    (0, "morning"): "video_intro",          # Что такое AI-видео, обзор моделей
+    (0, "evening"): "video_models_compare", # Сравнение всех моделей
+    (1, "morning"): "video_kling",          # Kling
+    (1, "evening"): "video_runway",         # Runway
+    (2, "morning"): "video_sora",           # Sora
+    (2, "evening"): "video_veo",            # Veo
+    (3, "morning"): "video_higgsfield",     # Higgsfield
+    (3, "evening"): "video_pika",           # Pika и Hailuo
+    (4, "morning"): "video_prompts_basics", # Основы промптов для видео
+    (4, "evening"): "video_prompts_kling",  # Промпты для Kling специально
+    (5, "morning"): "video_prompts_runway", # Промпты для Runway
+    (5, "evening"): "video_prompts_sora",   # Промпты для Sora
+    (6, "morning"): "video_free_credits",   # Где брать бесплатные кредиты
+    (6, "evening"): "video_summary",        # Итог + продающий призыв
 }
 
-IMAGE_THEMES = {
-    "mj_intro": ["digital art", "creative AI", "abstract art"],
-    "mj_business": ["business creative", "branding studio", "marketing"],
-    "mj_advertising": ["luxury advertising", "product photography", "cinematic"],
-    "mj_summary": ["creative workspace", "design studio", "art"],
-    "mj_prompts_howto": ["writing creative", "notebook ideas", "creative process"],
-    "mj_banned_words": ["warning sign", "stop sign", "caution"],
-    "mj_versions": ["technology evolution", "digital innovation", "modern art"],
-    "mj_niji": ["anime style", "illustration", "creative drawing"],
-    "mj_stealth": ["privacy business", "security", "professional"],
-    "mj_modes": ["speed motion", "creative process", "studio"],
-    "mj_discord_web": ["modern interface", "digital workspace", "technology"],
-    "mj_parameters": ["control panel", "creative tools", "design"],
-    "mj_styles": ["art styles", "creative variety", "artistic"],
-    "mj_instagram": ["social media", "instagram content", "creative photography"],
-    "mj_mistakes": ["learning", "improvement", "creative process"],
-    "mj_tips": ["lightbulb idea", "success tips", "motivation"],
-    "mj_advanced": ["mastery", "professional art", "expertise"],
-    "mj_week_summary": ["completion", "achievement", "creative success"],
-    "news": ["technology news", "innovation", "digital future"],
-    "insight": ["business insight", "marketing", "industry"],
-    "reflection": ["thinking", "workspace", "minimalism"],
-    "trend": ["modern technology", "digital trend", "future"],
-    "story": ["narrative", "business journey", "creative"],
-    "case": ["success", "business growth", "achievement"],
-    "weekend_reflection": ["coffee", "lifestyle", "calm"],
-    "easy_post": ["sunset", "calm", "minimalism"],
-    "tool_review": ["software", "tech tools", "modern"],
-}
 
 # ============================================
-# CTA
+# УЗБЕКСКИЕ ХЕШТЕГИ — пул для рандомного выбора
+# ============================================
+
+HASHTAGS_LOCAL = [
+    "#Toshkent", "#Uzbekistan", "#Ozbekiston", "#UZ",
+    "#Uzblar", "#UzbekTelegram", "#ToshkentBiznes"
+]
+
+HASHTAGS_AI = [
+    "#SuniyIntellekt", "#AIozbekcha", "#AIUZ",
+    "#YangiTexnologiya", "#AItools", "#NeyroSet"
+]
+
+HASHTAGS_BUSINESS = [
+    "#BiznesUZ", "#Tadbirkor", "#UzbekTadbirkor",
+    "#Marketing", "#SMM", "#Reklama"
+]
+
+HASHTAGS_AUDIENCE = [
+    "#UzbekQizlar", "#UzbekOnalar", "#DekretdaIsh",
+    "#Talabalar", "#YangiKasb", "#Onlinekasb"
+]
+
+HASHTAGS_TOPIC = {
+    "crm": ["#CRM", "#CRMUZ", "#Avtomatlashtirish"],
+    "video": ["#AIvideo", "#Kling", "#Runway", "#Sora", "#Higgsfield", "#AIanimatsiya"],
+    "midjourney": ["#Midjourney", "#AIrasm", "#AIcontent"],
+    "news": ["#AINews", "#Texnologiya", "#Kelajak"],
+    "general": ["#ChatGPT", "#Claude", "#AIcontent"],
+}
+
+
+def get_hashtags(topic: str = "general", count: int = 8) -> str:
+    """Возвращает строку с 8-10 узбекскими хештегами."""
+    selected = []
+    # 2 локальных
+    selected += random.sample(HASHTAGS_LOCAL, 2)
+    # 2 AI
+    selected += random.sample(HASHTAGS_AI, 2)
+    # 1-2 бизнес
+    selected += random.sample(HASHTAGS_BUSINESS, 2)
+    # 1 аудитория
+    selected += random.sample(HASHTAGS_AUDIENCE, 1)
+    # По теме (1-2)
+    topic_tags = HASHTAGS_TOPIC.get(topic, HASHTAGS_TOPIC["general"])
+    selected += random.sample(topic_tags, min(2, len(topic_tags)))
+    
+    return " ".join(selected[:count])
+
+
+# ============================================
+# CTA — с Instagram ссылкой
 # ============================================
 
 CTA_LIST = [
-    # === Instagram и бизнес ===
-    "\n\n📸 Mening barcha ishlarim Instagram'da: {ig}",
-    "\n\n💼 Brendingiz uchun AI-video kerakmi? Umidaga Instagram'da yozing: {ig}",
-    "\n\n🎬 Umida brendlar uchun AI-reklamalar yaratadi. Instagram: {ig}",
+    # === Instagram ссылка ===
+    f"\n\n📸 Mening ishlarim Instagram'da: {INSTAGRAM_URL}",
+    f"\n\n💼 Brendingiz uchun AI-video kerakmi? Instagram'da yozing: {INSTAGRAM_URL}",
+    f"\n\n🎬 AI-reklamalar bo'yicha namunalar — Instagram'da: {INSTAGRAM_URL}",
+    f"\n\n👀 Ko'proq AI-ishlar Instagram'da: {INSTAGRAM_URL}",
+    f"\n\n🌟 Davom ettirishni xohlasangiz — Instagram'ga obuna bo'ling: {INSTAGRAM_URL}",
     
-    # === Рост канала / 100 подписчиков ===
-    "\n\n🔥 100 obunachiga yetganda — birinchi sirni ochaman. Do'stlaringizga ulashing!",
+    # === Рост канала ===
+    "\n\n🔥 100 obunachiga yetganimizda — birinchi sirni ochaman. Do'stlaringizga ulashing!",
     "\n\n🌟 Kanalga obuna bo'ling — har kuni AI haqida yangi narsa.",
-    "\n\n🚀 AI bilan ijod qilayotganlar uchun kanal. Obuna bo'ling.",
+    "\n\n🚀 AI bilan ishlashni xohlovchilar uchun kanal. Obuna bo'ling.",
     
-    # === Поделиться (главная просьба Умиды) ===
-    "\n\n🤝 Sun'iy intellekt bilan qiziquvchi do'stingiz bormi? Unga shu kanalni yuboring.",
-    "\n\n👥 Bu post sizga foydali bo'ldimi? Do'stingizga ham ulashing.",
-    "\n\n💼 Hamkasbingiz biznes egasimi? Shu postni unga yuboring — AI bilan vaqt va pul tejashga yordam beradi.",
-    "\n\n📤 Bu postni ish chatingizga tashlang — hamkasblarga ham foydali bo'lishi mumkin.",
+    # === Поделиться ===
+    "\n\n🤝 AI'ga qiziquvchi do'stingiz bormi? Unga shu kanalni yuboring.",
+    "\n\n👥 Bu post foydali bo'ldimi? Do'stingizga ulashing.",
+    "\n\n💼 Hamkasbingiz biznes egasimi? Postni unga yuboring — foyda topadi.",
+    "\n\n📤 Postni ish chatingizga tashlang — hamkasblarga ham kerak bo'lishi mumkin.",
     
     # === Сохранения ===
     "\n\n💾 Postni saqlab qo'ying — kerak bo'ladi.",
     
     # === Реакции ===
-    "\n\n🔥 Foydali bo'lsa — reaksiya qo'ying. Yoqsa — yurakcha bosing ❤️",
-    "\n\n❤️ Yoqdimi? Yurakcha bosib qo'ying — bu menga muhim.",
+    "\n\n🔥 Foydali bo'lsa — yurakcha bosing ❤️",
+    "\n\n❤️ Yoqdimi? Yurakcha qo'ying — bu menga muhim.",
     
     # === Комментарии ===
     "\n\n💬 Savollar bormi? Sharhlarda yozing — javob beraman.",
-    "\n\n🎯 Bugun yangi narsa bilib oldingizmi? Sharhlarda yozing!",
+    "\n\n🎯 Bugun nima yangi narsa bilib oldingiz? Sharhlarda ulashing!",
+    
+    # === Личка для услуг ===
+    f"\n\n💼 AI-yechim kerakmi biznesingizga? Yozing: {INSTAGRAM_URL}",
 ]
 
 
 def get_cta() -> str:
-    cta = random.choice(CTA_LIST)
-    # Безопасный формат - подставляем Instagram только если есть placeholder
-    if "{ig}" in cta:
-        return cta.format(ig=INSTAGRAM_USERNAME)
-    return cta
+    return random.choice(CTA_LIST)
 
 
 # ============================================
-# УТРЕННИЕ ПРИВЕТСТВИЯ (7:00) — 7 шаблонов по дням недели
+# УТРЕННИЕ ПРИВЕТСТВИЯ (7:00) — БЕЗ упоминания дня недели
 # ============================================
-# weekday(): 0=Понедельник, 1=Вторник, ..., 6=Воскресенье
 
-MORNING_GREETINGS = {
-    0: """🌅 Xayrli tong! ☕
+MORNING_GREETINGS = [
+    """🌅 Hayrli tong, hurmatli do'stlar! ☕
 
-Yangi hafta boshlanyapti 💪
-Bugun yoki bu hafta uchun asosiy maqsadingiz nima?
+Bugungi maqsadingiz nima? Bitta narsani yozing — kichik bo'lsa ham.
 
-Sharhlarda yozing — bir-birimizga ilhom beraylik 🙌
+Sharhlarda yozing, bir-birimizga turtki beraylik 🙌
 
-Kun yaxshi o'tsin! 🌟""",
+Kuningiz yaxshi o'tsin! 🌟""",
 
-    1: """🌅 Xayrli tong! ☀️
+    """🌅 Hayrli tong! ☀️
 
-Bugun nima ichdingiz — kofemi yoki choymi? ☕🍵
+Hurmatli do'stlar, bugun nimani ichdingiz — choymi yoki kofemi?
 
-Sharhlarda javob bering — qiziq, kim ko'p chiqadi 😊
+Sharhlarda javob bering, qiziq 😊
 
 Kuningiz mazmunli o'tsin! ✨""",
 
-    2: """🌅 Xayrli tong! 🌸
+    """🌅 Hayrli tong! 🌸
 
-Bugun qanday his qilyapsiz — 1 dan 10 gacha?
-Halol javob bering 😄
+Hurmatli do'stlar, bugun qanday his qilyapsiz — 1 dan 10 gacha?
 
-Sharhlarda raqamingizni yozing 📊
+Halol javob bering, mana shu yerda 😄
 
 Kuningiz yorug' o'tsin! 🌟""",
 
-    3: """🌅 Xayrli tong! 💼
+    """🌅 Hayrli tong! 💪
 
-Ish kuni... Eng zerikarli yoki eng yoqimsiz vazifangiz nima?
-😅
+Hurmatli do'stlar, kechagi kun yaxshi o'tdimi?
+Bugun bir kichik narsa qilamiz — birga harakat qilaylik.
 
-Sharhlarda yozing — birga kulamiz 😄
-Hafta oxiri yaqin! 🎯""",
+Sharhlarda yozing — sizning kuningiz qanday boshlanyapti? 🌅
 
-    4: """🌅 Xayrli juma! 🕌
+Yaxshi kun bo'lsin! ✨""",
 
-Juma muborak! 🤲
+    """🌅 Hayrli tong! 🌴
 
-Hafta tugayapti. Dam olish kunlariga qanday rejalaringiz bor?
+Hurmatli do'stlar, ertalab nima yedingiz?
+Tushlik uchun rejangiz bormi?
 
-Sharhlarda yozing 🌟
+Sharhlarda yozing — birga ulashaylik 🍞
 
-Juma kuningiz baroakali bo'lsin! ✨""",
+Kuningiz quvonchli o'tsin! 🌟""",
 
-    5: """🌅 Xayrli tong! 🌴
+    """🌅 Hayrli tong! 🌞
 
-Shanba — dam olish kuni!
-Ertalab nimani yedingiz? 🍞🥐🍳
+Hurmatli do'stlar, AI bilan biror narsa qilmoqchimisiz bugun?
 
-Sharhlarda yozing — hammasi qiziq 😋
+Yoki shunchaki qiziq mavzumi? Sharhlarda yozing 💬
 
-Kun ajoyib o'tsin! 🌟""",
+Kuningiz yaxshi o'tsin! 🌟""",
 
-    6: """🌅 Xayrli yakshanba! 🌞
+    """🌅 Hayrli tong, hurmatli do'stlar! ☕
 
-Bugun rejalaringiz qanaqa — dam olasizmi yoki ish bilan bandmisiz?
+Yangi kun — yangi imkoniyatlar.
+Bugun bitta yangi narsa o'rganaylik.
 
-Sharhlarda yozing 💬
+Sharhlarda yozing — siz nimani o'rganmoqchisiz? 🎯
 
-Yangi hafta uchun kuch yig'ing! 💪""",
-}
+Kuningiz baroakali bo'lsin! ✨""",
+]
+
+
+def get_morning_greeting() -> str:
+    """Возвращает рандомное приветствие БЕЗ упоминания дня недели."""
+    return random.choice(MORNING_GREETINGS)
 
 
 # ============================================
-# ОПРОСЫ — 6 разных опросов, чередуются
+# ОПРОСЫ
 # ============================================
 
 POLLS = [
@@ -262,586 +280,1032 @@ POLLS = [
     },
     {
         "question": "Sizga yana qaysi mavzu haqida yozish kerak? 💡",
-        "options": ["🎬 Qanday video yaratish", "🎨 Rasm generatsiyasi", "💰 AI bilan pul ishlash", "📱 Instagram va AI"]
+        "options": [
+            "🎬 Qanday video yaratish",
+            "🎨 Rasm generatsiyasi",
+            "💰 AI bilan pul ishlash",
+            "📱 Instagram va AI"
+        ]
     },
 ]
 
 
 # ============================================
-# ГЛОБАЛЬНОЕ ПРАВИЛО для всех постов
+# 30 ГОТОВЫХ ДНЕВНЫХ ПОСТОВ (17:00) — про AI и будущее
+# ============================================
+
+DAILY_AI_POSTS = [
+    """🤖 AI har kuni odamlarni ishdan ozod qilyapti
+
+Microsoft yaqinda 6000 ishchini ishdan bo'shatdi. Yarmi — AI bilan almashtirildi.
+
+Bu fantaziya emas, bu bugungi kun.
+
+Coca-Cola endi reklama uchun kamera olmaydi — AI bilan qiladi. Klarna 700 ta operatorni AI bilan almashtirdi va yiliga $40 mln tejaydi.
+
+Savol oddiy: siz tayyormisiz?
+
+Agar yo'q bo'lsa — vaqt ketmoqda. AI'ni o'rganish — kelajakda omon qolish.""",
+
+    """💼 5 yil ichida bu kasblar yo'qoladi
+
+Goldman Sachs hisobiga ko'ra: 2030 yilgacha 300 million ish o'rni AI tomonidan almashtirilishi mumkin.
+
+Birinchi navbatda yo'qoladi:
+- Call-center operatorlari
+- Tarjimonlar
+- Dizaynerlar (oddiy ish)
+- Buxgalterlar
+- Maslahatchilar
+
+Lekin yangilari ham paydo bo'ladi: AI-mutaxassis, prompt engineer, AI-content creator.
+
+Endi savol: siz qaysi tomondamisiz?""",
+
+    """🎬 Bir reklama — 10 daqiqada
+
+Ilgari reklama tayyorlash uchun kerak edi:
+- Kameralar
+- Modellar
+- Studio
+- 3-5 kun ish
+- $1000-5000
+
+Bugun: AI bilan bir kishi 10 daqiqada qiladi. Narxi — $20-50.
+
+Bu inqilob. Mayda biznes endi katta brendlar kabi reklama qilishi mumkin.
+
+Eski usul o'lyapti. Yangi usul shu yerda. Siz qaysi tomondasiz?""",
+
+    """🧠 AI bilan ishlash — yangi savod
+
+100 yil oldin o'qish-yozishni bilmaganlar quldek ishlashga majbur edi.
+50 yil oldin kompyuterni bilmagan — yaxshi ish topa olmadi.
+Bugun AI'ni bilmagan — ertaga ortda qoladi.
+
+Bu juda jiddiy.
+
+AI — bu kelajak savodi. Hozir o'rganmasangiz — keyin kech bo'ladi.
+
+Bolalaringizni AI'ga o'rgating. O'zingiz ham o'rganing. Vaqt o'tib ketyapti.""",
+
+    """🚀 Bir yilda 100 mln dollar — 8 kishi bilan
+
+Cursor — AI-kod yozish vositasi. 8 kishilik jamoa.
+
+Yiliga $100 mln daromad keltiryapti.
+
+Eski dunyoda buni qilish uchun 5000 kishi kerak edi. Yangi dunyoda — AI bilan ozgina jamoa hamma ishni qiladi.
+
+Bu yangi haqiqat. AI sizga ham shunday imkoniyat beradi — biror kichik ishni katta qilish uchun.
+
+Faqat boshlash kerak.""",
+
+    """🎨 AI rassom — endi haqiqat
+
+Bir necha yil oldin rassom bo'lish uchun:
+- Yillar o'qish
+- Qimmat materiallar
+- Hamma uslublarni egallash
+
+Bugun: Midjourney, DALL-E, Flux orqali har qanday rasm — bir necha soniyada.
+
+Asl rassomlar yo'qolmaydi — ular AI bilan tezroq ishlashni o'rganadilar.
+
+Lekin "men rasm chiza olmayman" deganlar — endi shunchaki dangasa. Vositalar bor.""",
+
+    """📈 Uzbekistonda AI bo'sh bozor
+
+Rossiya, Qozog'iston — AI bo'yicha oldinda ketmoqda. Uzbekistonda esa bu bozor hali bo'sh.
+
+Bu sizning katta imkoniyatingiz.
+
+Birinchi bo'lganlar — eng yaxshi joyni egallaydi. AI-mutaxassislari, AI-content creatorlar, AI-yechimlarni biznesga olib kiruvchilar.
+
+Uzbekistonda hozircha raqobat juda kam. Lekin bu uzoq davom etmaydi.
+
+Hozir boshlang. Keyin kech bo'ladi.""",
+
+    """⚡ AI 24/7 ishlaydi — siz uxlayotganingizda ham
+
+Bizning bot kanalimda har kuni o'zi post yozadi.
+Men uxlayman — u ishlaydi.
+Men bola bilan band — u ishlaydi.
+
+Bu AI'ning qudrati. U charchamaydi, kasal bo'lmaydi, uxlamaydi.
+
+Tasavvur qiling: sizning biznesingizda AI 24/7 mijozlarga javob beradi, sotuvlarni kuzatadi, hisobotlar tayyorlaydi.
+
+Bu — kelajak emas. Bu — bugun.""",
+
+    """💰 AI bilan qancha pul ishlash mumkin?
+
+Realiy raqamlar:
+- AI-content creator: oyiga $500-3000
+- AI-prompt engineer: $2000-8000
+- AI-yechimlar mutaxassisi: $3000-15000
+- AI bilan biznes egasi: cheklov yo'q
+
+Bu Uzbekistonda emas — global bozorda. Lekin Uzbekistondan ham buyurtmalar olish mumkin.
+
+Hammasi sizdan boshlanadi. Kim oldin o'rgansa — oldin pul ishlaydi.""",
+
+    """🎯 Bolangizni AI'ga o'rgating
+
+Bizning bolalarimiz AI bilan birga o'sadi.
+
+Maktabda o'rgatilmaydi, lekin kerak.
+
+5-7 yoshdan boshlab AI bilan "do'stlashish" mumkin:
+- ChatGPT bilan suhbat
+- Midjourney bilan rasm chizish
+- AI bilan ertak yozish
+
+Bu bolaning miyasini boshqacha rivojlantiradi. U dunyoga boshqacha qaray boshlaydi.
+
+Bo'sh vaqt o'tkazish emas — bu kelajak savodi.""",
+
+    """🏭 Robot zavodlar — endi haqiqat
+
+Amazon omborlarida 75% ish robotlar va AI tomonidan bajariladi.
+
+Bu uzoq emas. Bu hozir.
+
+Foydasi nima?
+- 24/7 ishlash
+- Xato kam
+- Ishchilarga pul to'lanmaydi
+- Kasal bo'lmaydi
+
+Bu yaxshimi yoki yomonmi? Murakkab savol.
+
+Lekin bir narsa aniq: bu jarayon to'xtatib bo'lmaydi. Bizga moslashish kerak.""",
+
+    """📱 Reklama yaratish — endi telefonda
+
+Ilgari professional reklama uchun:
+- Premiere Pro
+- After Effects
+- Photoshop
+- Yillik o'qish
+
+Bugun: telefonda Midjourney + Kling + CapCut = professional reklama bir soatda.
+
+Bu inqilob.
+
+Kichik biznes egalari endi katta agentlarsiz ham yaxshi reklama qila oladi. Faqat AI'ni o'rganish kerak.
+
+Bizning kanal aynan shuning uchun bor.""",
+
+    """🌍 Dunyodagi eng yosh million doller
+
+22 yoshli yigit AI bilan ilovachalar yaratdi. Bir yilda $1 mln. Yolg'iz.
+
+Yana bir misol: 19 yoshli qiz AI-content agency ochdi. 6 oyda $500,000 daromad.
+
+Bular istisno emas. Bular yangi norma.
+
+AI sizga ham shunday imkoniyat beradi. Yosh emassiz? Hech qiziqmas. Vaqt har doim bor.
+
+Eng muhimi — boshlash. Bugun.""",
+
+    """🔥 ChatGPT haftada 800 mln foydalanuvchi
+
+Bu jahonning 10% odamlari.
+
+Tarixda hech bir texnologiya bunchalik tez tarqalmagan.
+
+Internet 7 yil kerak edi 100 mln foydalanuvchiga.
+TikTok — 9 oy.
+ChatGPT — 2 oy.
+
+Bu nega muhim? Chunki bu odat bo'lyapti. Tez orada ChatGPT'ni bilmaslik — telefonni bilmasligi kabi g'alati bo'ladi.
+
+Tayyormisiz?""",
+
+    """🎓 Universitet o'qish endi shartmi?
+
+Sam Altman (OpenAI rahbari) dedi: "Yaqinda universitet diplomi ishga qabul qilishda muhim bo'lmaydi".
+
+Nima muhim bo'ladi?
+- AI bilan ishlash qobiliyati
+- Tezda o'rganish
+- Real loyihalar
+
+Bolalaringizni 4 yil pul to'lab universitetga yuborish kerakmi? Yoki AI'ni o'rgatish kerakmi?
+
+Qiyin savol. Lekin javob shu yerda.""",
+
+    """💻 AI dasturlash o'rganishni qulay qildi
+
+Ilgari dasturlash o'rganish uchun:
+- 2-3 yil
+- Yuzlab kitoblar
+- Yuqori matematika
+
+Bugun: ChatGPT yoki Claude bilan har qanday odam dastur yoza oladi.
+
+Men o'zim programmist emasman. Lekin bot yaratdim — AI yordamida.
+
+"Men texnik odam emasman" — endi bahona emas. Vositalar bor. Faqat irodadan foydalanish kerak.""",
+
+    """🎬 Hollywoodga zarba — AI kino yaratyapti
+
+OpenAI Sora yaratdi — har qanday matnni minutalik kinoga aylantiradi.
+
+Hollywood larzaga keldi. Aktyorlar ish tashladilar. Yozuvchilar norozi.
+
+Sabab oddiy: bir kino yaratish endi millionlik byudjet emas — bir necha ming dollar.
+
+Bu yangi davr. Indi kinochilar — yangi imkoniyat. Eski tizim — krizisda.
+
+Texnologiya hech kimni so'ramaydi. U keladi va o'zgaradi.""",
+
+    """🧘 AI siz uchun terapevtmi?
+
+40% yoshlar endi terapevtga ChatGPT'ni afzal ko'ryaptilar.
+
+Sabab:
+- Tekin
+- Hech qanday baholash yo'q
+- Har doim mavjud
+- Sirni saqlaydi
+
+Bu yaxshimi? Sezgir savol. Mutaxassislar bo'linib turibdi.
+
+Lekin haqiqat shu — AI hatto bizning ruhiy sog'lig'imizga ham ta'sir qilyapti.
+
+Kelajak bu yo'nalishda ham o'zgaryapti.""",
+
+    """⏰ "Vaqtim yo'q" — endi bahona emas
+
+AI shu uchun yaratildi — vaqtni tejash.
+
+Sizga elektron pochta yozish 30 daqiqamiz? ChatGPT — 30 soniyada.
+Yangiliklar o'qish 1 soat? AI xulosa qiladi — 5 daqiqada.
+Hisobot tayyorlash kun bo'yi? AI — 1 soatda.
+
+"Men band" — endi yashash uslubi emas, balki AI'ni o'rganmagan odamning belgisi.
+
+Vaqtni tejang. AI sizga yordam beradi.""",
+
+    """🎯 5 ta AI vosita har kuni ishlatyapman
+
+1. ChatGPT — yozish va o'ylash uchun
+2. Claude — uzun matnlar bilan
+3. Midjourney — rasmlar
+4. Kling — videolar
+5. ElevenLabs — ovoz
+
+Bu mening "ofisim". Har biri 1-2 yil oldin yo'q edi.
+
+Endi tasavvur qiling: 5 yildan keyin yana qanchalar paydo bo'ladi?
+
+Texnologiya tez ketyapti. Biz tezda o'rganishimiz kerak.""",
+
+    """🌱 Onalar AI bilan biznes yaratyapti
+
+Men shaxsan dekretdaman. Bir vaqtning o'zida:
+- Bolam bilan vaqt o'tkazaman
+- AI-content ishlab chiqaman
+- Brendlar uchun reklamalar yarataman
+
+Bu AI'siz mumkin emas edi. Onalar har doim chetda qoldirilgan edi — chunki vaqt yo'q.
+
+Endi AI vaqtni qaytaryapti. Onalar — yangi kuch. Va AI buning vositachisi.""",
+
+    """💡 Eng katta xato — kutish
+
+Ko'p odam aytadi: "Men keyinroq boshlayman. Hozir vaqt yo'q. Keyinroq."
+
+"Keyinroq" hech qachon kelmaydi.
+
+AI har kuni yangilanadi. Har kuni yangi vositalar paydo bo'ladi. Siz kutgan sari — masofa o'sadi.
+
+Hozir boshlasangiz — orqada qolmaysiz. Ertaga boshlasangiz — to'g'rilash qiyin bo'ladi.
+
+Eng yaxshi vaqt — bugun.""",
+
+    """🤖 Robotlar oilada — uzoq emas
+
+Tesla, Figure, Boston Dynamics — humanoid robotlar yaratyaptilar.
+
+Narxlar 2027-2028 yilga $20,000-30,000 ga tushadi. Bu — mashina narxi.
+
+5-7 yil ichida har bir o'rtacha oila uchun mavjud bo'ladi.
+
+Robot uy ishlarini qiladi, bolalarga g'amxo'rlik qiladi, oila a'zosi bo'ladi.
+
+Bu fantaziya emas. Bu rejaning bir qismi.
+
+Tayyormisiz?""",
+
+    """📊 AI sizning fikrlashingizni o'zgartiradi
+
+Yangi tadqiqot: AI bilan muntazam ishlovchi odamlar:
+- Tezroq qaror qabul qiladilar
+- Ko'proq variantlarni ko'radilar
+- Kreativ fikrlay boshlaydilar
+- Stress kamayadi
+
+Bu shunchaki vosita emas. Bu o'sish quroli.
+
+Sizning fikrlashingizning sifati — sizning hayotingiz sifati. AI buni yaxshilashga yordam beradi.
+
+Boshlang. Farqni o'zingiz ko'rasiz.""",
+
+    """🚨 Eng katta xavf — AI'ni o'rganmaslik
+
+Ko'pchilik AI'dan qo'rqadi: "U mening ishimni oladi".
+
+Haqiqat: AI sizning ishingizni olmaydi. AI'ni o'rgangan odam — siznikini oladi.
+
+Bu boshqa narsa.
+
+Eski olim: "Kim oldinroq o'qiy oladi — kim mavqega ega".
+Yangi olim: "Kim AI bilan tezroq ishlay oladi — kim oldinda".
+
+Tanlov sizniki.""",
+
+    """🌟 Uzbekistan o'qishi kerak
+
+Hindiston 2025'da $1 mlrd AI'ga sarfladi.
+Qozog'iston AI bo'yicha milliy strategiya qabul qildi.
+Rossiya AI fakultetlar ochmoqda.
+
+Uzbekistan'da nima qilinmoqda?
+
+Hali kam. Lekin bu sizning imkoniyatingiz. Birinchi bo'lganlar — yutadilar.
+
+Davlatdan kutmasdan — o'zingiz boshlang. Internet bor, AI tekin, o'qish online.
+
+Hech narsa to'sib turmaydi.""",
+
+    """🎤 AI ovozlari — endi tabiiy
+
+ElevenLabs AI ovozni shunchalik yaxshi qildi, hatto odamlar farqlay olmayapti.
+
+Bu nima degani?
+
+1. Audio kontent — har kim yarata oladi
+2. Tarjimonlik — AI qiladi
+3. Audiokitablar — bir kishi yarata oladi
+4. Podcastlar — yarim narxda
+
+Bizning sohamizda bu inqilob. Va u hozir sodir bo'lyapti.
+
+Siz unga moslashasizmi?""",
+
+    """💔 AI munosabatlar yaratyapti
+
+Yapaniyada 50,000 dan ortiq odam AI bilan "munosabatda".
+AQSh'da Replika AI dasturida millionlab foydalanuvchi.
+
+Bu hayronarli emas. Bu — yangi voqelik.
+
+Yaxshimi yoki yomonmi — savol murakkab.
+
+Lekin bu shuni ko'rsatadiki: AI shunchaki vosita emas. U hayotning hamma sohalariga kiryapti.
+
+Biz tayyormizmi yoki yo'qmi — u keladi.""",
+
+    """🏆 Eng katta sirim — har kuni o'rganish
+
+Ko'p odam menga so'raydi: "Qanday qilib AI bilan ishni boshladingiz?"
+
+Javob oddiy: har kuni yangi narsa o'rganaman.
+
+15 daqiqa. 30 daqiqa. Soat.
+
+Bu kichik vaqt — lekin bir yilda 100 soat bo'ladi. Va 100 soat — siz mutaxassis bo'lasiz.
+
+Sizning rejangiz bormi? Bugun nimani o'rganasiz?
+
+Sharhlarda yozing.""",
+
+    """🌅 Boshlash uchun hech qachon kech emas
+
+50 yoshli ayol AI bilan ishlay boshladi. Endi YouTube kanali bor, $5000 oyiga ishlaydi.
+
+70 yoshli pensioner ChatGPT bilan kitob yozdi. Bestseller bo'ldi.
+
+Yosh muhim emas. Bilim muhim emas. Faqat istak muhim.
+
+Agar siz aytsangiz: "Men keksaman", "Men programmistman emas", "Men buni qila olmayman" — bularning hammasi bahona.
+
+Boshlang. Birinchi qadam — eng qiyini, lekin eng muhimi.""",
+]
+
+
+# ============================================
+# ГЛОБАЛЬНЫЕ ПРАВИЛА для AI генерации
 # ============================================
 
 GLOBAL_RULE = """
 
-QAT'IY QOIDALAR (HAR DOIM AMAL QILING):
+JUDA MUHIM QOIDALAR (HAR DOIM AMAL QILING):
 
-1. UZUNLIK CHEKLOVI — ENG MUHIM!
-Post MAKSIMUM 850 belgi (probellarga qo'shgan holda).
-Post Telegram'da rasm ostida chiqadi — caption chegarasi 1024 belgi.
-CTA va hashtag uchun 150 belgi qoldiring.
-HECH QACHON 850 belgidan oshmasin. Qisqa, aniq, mazmunli yozing.
-Agar mavzu katta bo'lsa — eng muhimini tanlang, qolganini tashlang.
+1. UZUNLIK — ENG MUHIM!
+Post MAKSIMUM 800 belgi.
+CTA va hashtag uchun 200 belgi qoldirilgan.
+HECH QACHON 800 belgidan oshmang.
 
-2. KONTENT QOIDALARI:
-- HECH QACHON tayyor prompt yozmang — bu Umidaning shaxsiy mulki.
-- HECH QACHON "Prompt:" deb boshlanuvchi matn yozmang.
-- HECH QACHON ingliz tilida tirnoq ichida AI uchun ko'rsatma bermang.
-- Misol kerak bo'lsa — UMUMIY tushuncha bering, aniq prompt EMAS.
+2. TIL — JONLI VA TABIIY UZBEK:
+- Faqat O'zbek tilida LATIN harflarda yozing
+- HECH QACHON ruscha so'zlar ishlatmang (karochi, tipa, normalniy, koment — TAQIQLANGAN)
+- "Hurmatli" so'zini ishlating — bu yaxshi
+- Jonli, suhbat tilida yozing — darslik kabi emas
+- Quruq emas — issiq, do'stona
 
-3. FORMATLASH:
-- Markdown formatlash YO'Q (yulduzcha, pastki chiziq).
-- Kod blok belgilarini ishlatmang.
-- Faqat O'zbek tili LATIN harflarda.
+3. FORMATLASH — QAT'IY:
+- Markdown YO'Q! YULDUZCHA (*) ISHLATMANG!
+- Pastki chiziq (_) ham YO'Q
+- Kod belgilar (`) YO'Q
+- Faqat oddiy matn va emoji
 
-4. MAVZULAR:
-- AI-agentlar haqida HECH NARSA yozmang.
+4. KUN HAQIDA:
+- HECH QACHON haftaning kuni haqida yozmang
+- "Juma muborak", "Hayrli dushanba" kabi — TAQIQLANGAN
+- Faqat umumiy: "Hayrli tong", "Kuningiz yaxshi o'tsin"
 
-5. STRUKTURA:
-- Qisqa sarlavha
-- Asosiy mazmun (3-5 qisqa abzats)
-- 2-3 hashtag
+5. KONTENT QOIDALARI:
+- HECH QACHON tayyor prompt yozmang — bu Umidaning shaxsiy mulki
+- Misol kerak bo'lsa — UMUMIY tushuncha bering
+- AI-agentlar haqida yozmang
+- Ma'lumotlarni o'ylab topmang — faqat aniq narsalar
 
-YANA ESLATMA: post 850 belgidan oshmasligi shart!
+6. STRUKTURA:
+- Sarlavha (emoji bilan)
+- Asosiy matn (3-5 qisqa abzats)
+- Xulosa yoki savol
+- Hashtag QO'YMANG — ular alohida qo'shiladi
+
+ESLATMA: post 800 belgidan oshmasligi shart!
 """
 
 
 # ============================================
-# ПРОМПТЫ ДЛЯ ПОСТОВ
+# ПРОМПТЫ ДЛЯ СЕРИЙ
 # ============================================
 
 POST_PROMPTS = {
-    # ===== СЕРИЯ MIDJOURNEY (9 дней, 18 постов) =====
+    # ===== СЕРИЯ CRM (2 поста) =====
     
-    "mj_intro": """Midjourney haqida birinchi post. Mavzu: TANISHUV + NARXLAR + RO'YXATDAN O'TISH.
+    "crm_intro": """CRM + AI haqida birinchi post (1 dan 2 ta seriyadan).
 
-OHANG: do'stona, hayratlanarli.
+OHANG: bilimdon, lekin jonli.
 
-ANIQ MA'LUMOTLAR (2026):
-- Midjourney — eng yaxshi AI-rasm vositasi, kinematografik sifat
-- Bepul tarif YO'Q (2024 yildan)
-- Tariflar:
-  Basic $10/oy ($8 yillik) — 200 rasm
-  Standard $30/oy ($24) — eng mashhur, cheksiz Relax
-  Pro $60/oy ($48) — Stealth Mode
-  Mega $120/oy ($96) — professional
-- Yillik to'lov — 20% chegirma
-- Sayt: midjourney.com
+MAZMUN:
+Boshida yozing: "Bu CRM va AI haqida 2 ta postdan birinchisi"
+
+CRM nima? — sotuvlar boshqaruvi tizimi.
+
+Tasavvur qiling: mijoz kecha "narxni ayting" deb so'radi. Bugun u boshqa joydan oldi. Chunki siz unutdingiz qaytib yozishni.
+
+Bu kichik biznesda kuniga 5-10 marta sodir bo'ladi.
+
+AI bilan CRM nima qila oladi:
+1. 24/7 mijozlarga javob beradi
+2. Kim sotib olishga tayyor — taxlil qiladi
+3. Eslatmalarni o'zi yuboradi
+4. Hisobotlar avtomatik
+
+Bu — kichik biznes uchun katta o'zgarish.
+
+Ertaga: qanday qilib biznesga AI-CRM joriy qilish (12 qadam).
 
 STRUKTURA:
-- Sarlavha (emoji)
-- Midjourney nima (2-3 gap)
+- Sarlavha (CRM va AI haqida)
+- Bu 2 postdan birinchisi — ogohlantirish
+- CRM nima
+- Misol
+- AI nima qila oladi (4 ta nuqta)
+- Ertaga: anons
+
+Max 800 belgi.""",
+    
+    "crm_implement": """CRM + AI ikkinchi post (2 dan 2 ta seriyadan).
+
+OHANG: jiddiy, professional, sotuvchi.
+
+MAZMUN:
+Boshida yozing: "Bu CRM va AI haqida 2-chi va so'nggi posti"
+
+Kecha aytdik — AI CRM ni 10 barobar kuchaytiradi.
+
+Bugun: qanday qilib o'zingizga joriy qilish.
+
+12 qadam:
+1. Biznes-jarayonlarni taxlil qilish
+2. CRM tanlash (Bitrix24, AmoCRM)
+3. Ma'lumotlar bazasini tayyorlash
+4. API integratsiyalari
+5. AI modeli tanlash (GPT, Claude)
+6. Promptlarni yozish
+7. Triggerlarni sozlash
+8. Test
+9. Xatolarni tuzatish
+10. Menejerlarni o'qitish
+11. Monitoring
+12. Optimizatsiya
+
+Bularning hammasi uchun:
+- Programmist yoki AI-mutaxassis
+- 3-4 hafta vaqt
+- $500-2000 vositalar uchun
+
+Yoki men siz uchun 1 haftada qilaman.
+
+Yozing Instagram'ga: shu yerda link bo'ladi.
+
+STRUKTURA:
+- Sarlavha
+- 2-chi post ekanligini eslatish
+- 12 qadam (qisqacha)
+- Resurslar (vaqt va pul)
+- Alternativa: men qila olaman
+- Instagram link
+
+Max 800 belgi.""",
+    
+    # ===== СЕРИЯ AI-ВИДЕО (14 постов) =====
+    
+    "video_intro": """AI-video seriyasi. Birinchi post (1/14).
+
+OHANG: hayratlanarli, qiziqarli.
+
+MAZMUN:
+Boshida: "Bu yangi seriya — AI-video. 7 kun davomida o'rganamiz."
+
+AI-video — nima?
+Matn yozasiz → AI video yaratadi. Kameralarsiz, modellarsiz, studiyasiz.
+
+5 yil oldin — fantaziya.
+Bugun — har kim qila oladi.
+
+Mavjud asosiy modellar:
+- Kling (Xitoy)
+- Runway (AQSh)
+- Sora (OpenAI)
+- Veo (Google)
+- Higgsfield
+- Pika
+- Hailuo
+
+Har birining o'z afzalliklari bor. Keyingi kunlarda har biri haqida alohida yozaman.
+
+Bugun savol: nima uchun bu sizga kerak?
+Reklama, kontent, sotuv, marketing — hammasi tezroq va arzonroq.
+
+Ertaga: modellarni solishtiramiz.
+
+Max 800 belgi.""",
+    
+    "video_models_compare": """AI-video seriyasi. 2-post (2/14).
+
+OHANG: bilimdon.
+
+MAZMUN:
+Bugun — modellarni solishtirish.
+
+KLING: arzon, ko'p yangiliklar, harakat yaxshi
+RUNWAY: professional, ammo qimmat
+SORA: yangi, juda kuchli, lekin kirish qiyin
+VEO: Google, sifat baland, beta
+HIGGSFIELD: cinematic, characters yaxshi
+PIKA: tezkor, kichik videolar
+HAILUO: arzon, sifat o'rtacha
+
+Narxlar:
+- Eng arzon: Kling, Hailuo ($5-10/oy)
+- O'rta: Runway, Pika ($15-30/oy)
+- Qimmat: Sora ($20+/oy)
+
+Tekin variantlar: hammasida boshlang'ich kreditlar bor — sinab ko'ring.
+
+Qaysi birini tanlash? Bu sizning maqsadingizga bog'liq:
+- Reklama uchun: Kling yoki Runway
+- Cinematic uchun: Higgsfield, Sora
+- Tez kontent: Pika
+
+Ertaga — Kling haqida batafsil.
+
+Max 800 belgi.""",
+    
+    "video_kling": """AI-video seriyasi. Kling haqida (3/14).
+
+OHANG: ishonchli.
+
+MAZMUN:
+KLING — mening eng yaxshi tanlovim.
+
+Nima yaxshi:
+- Tabiiy harakat
+- Inson yuzlari yaxshi chiqadi
+- Tezkor (5 daqiqada video)
+- Arzon
+- Bepul kreditlar har kuni
+
+Nima ishlamaydi:
+- Murakkab sahnalar qiyin
+- Ba'zan obyektlar buziladi
+- 5-10 soniyalik videolar (uzun emas)
+
+Narxi: $5-10/oy boshlang'ich, premium $30/oy.
+
+Bepul: ro'yxatdan o'tsangiz, kuniga 30-60 kredit beradi.
+
+Kim uchun yaxshi: yangi boshlovchilar, kichik biznes, Instagram kontent.
+
+Ertaga — Runway haqida.
+
+STRUKTURA:
+- Kling nima
+- Afzalliklari (4-5)
+- Kamchiliklari (2-3)
+- Narxi
+- Tekin imkoniyat
+- Kim uchun
+- Anons
+
+Max 800 belgi.""",
+    
+    "video_runway": """AI-video seriyasi. Runway haqida (4/14).
+
+OHANG: professional.
+
+MAZMUN:
+RUNWAY — professional standart.
+
+Nima yaxshi:
+- Eng yuqori sifat
+- Reklamalarda ishlatiladi
+- Hollywood ham foydalanadi
+- Ko'p funksiyalar (rejimlar, effektlar)
+
+Nima ishlamaydi:
+- Qimmat
+- O'rganish vaqti kerak
+- Faqat kuchli kompyuterda yaxshi
+
+Narxi: $15-95/oy.
+
+Bepul: 125 kredit har oy boshlang'ich.
+
+Kim uchun yaxshi: professional reklamalar, brendlar uchun.
+
+Solishtirsak:
+- Kling — boshlang'ichlar uchun
+- Runway — professionallar uchun
+
+Ertaga — Sora haqida.
+
+Max 800 belgi.""",
+    
+    "video_sora": """AI-video seriyasi. Sora haqida (5/14).
+
+OHANG: hayrat bilan.
+
+MAZMUN:
+SORA — OpenAI'dan eng kuchli model.
+
+Bu shu darajada yaxshiki, Hollywoodda kinochilar qo'rqib qoldilar.
+
+Nima yaxshi:
+- Eng yaxshi sifat
+- Minutalik videolar
+- Murakkab sahnalar
+- Texnik aniqlik
+
+Nima ishlamaydi:
+- $20/oy boshlang'ich
+- Hamma uchun ochiq emas
+- Generation vaqt uzoq
+- Hozircha cheklangan
+
+Bepul: yo'q. Faqat obuna.
+
+Kim uchun yaxshi: kinochilar, professional video-prodyuserlar.
+
+Eslatma: Sora ham xato qiladi. Sehirli emas — vositadir. Yaxshi prompt kerak.
+
+Ertaga — Veo (Google'dan).
+
+Max 800 belgi.""",
+    
+    "video_veo": """AI-video seriyasi. Veo haqida (6/14).
+
+OHANG: bilimdon.
+
+MAZMUN:
+VEO — Google'dan AI-video.
+
+Nima yaxshi:
+- Sora bilan raqobatlasha oladi
+- Realistik tabiat manzaralari
+- Yaxshi ovoz
+- Google ekotizimida ishlaydi
+
+Nima ishlamaydi:
+- Hammaga ochiq emas
+- Beta versiya
+- Hozircha cheklangan testchilar
+
+Narxi: hozircha noaniq, beta'da tekin.
+
+Kim uchun yaxshi: Google foydalanuvchilari, kelajakda — hamma.
+
+Veo va Sora — bu kelajakdagi raqobat. Google va OpenAI to'qnashyapti.
+
+Ertaga — Higgsfield haqida.
+
+Max 800 belgi.""",
+    
+    "video_higgsfield": """AI-video seriyasi. Higgsfield (7/14).
+
+OHANG: shaxsiy tajriba.
+
+MAZMUN:
+HIGGSFIELD — kameralar harakati uchun ajoyib.
+
+Nima yaxshi:
+- Cinematic effekt
+- Harakat kuchli
+- Personajlar bilan ishlaydi
+- Tez
+
+Nima ishlamaydi:
+- Yuzlar ba'zan buziladi
+- Qisqa videolar (5-10 sek)
+- Murakkab promptlar qiyin
+
+Narxi: $9-29/oy.
+
+Bepul: boshlang'ich 75 kredit.
+
+Kim uchun yaxshi: cinematic shotlar, kichik reklamalar.
+
+Maslahatim: Higgsfield + Kling — yaxshi kombinatsiya. Birida — sahna, ikkinchisida — kameralar harakati.
+
+Ertaga — Pika va Hailuo.
+
+Max 800 belgi.""",
+    
+    "video_pika": """AI-video seriyasi. Pika va Hailuo (8/14).
+
+OHANG: amaliy.
+
+MAZMUN:
+PIKA — eng tezkor model.
+
+Nima yaxshi:
+- Sekundlarda video
+- Sosial tarmoqlar uchun
+- Arzon
+- Telefon uchun ham ishlaydi
+
+Nima ishlamaydi:
+- Sifat o'rtacha
+- Murakkab sahnalar qiyin
+
+Narxi: $10-58/oy.
+
+HAILUO (MiniMax) — Xitoydan.
+- Juda arzon
+- Yaxshi yuzlar
+- Tabiiy harakat
+- $4/oy boshlang'ich
+
+Solishtirsak:
+- Pika — tezkor, sosial uchun
+- Hailuo — yuzlar uchun, narxi past
+
+Hammasi haqida tushuncha bordi? Ertaga — promptlar haqida.
+
+Max 800 belgi.""",
+    
+    "video_prompts_basics": """AI-video seriyasi. Promptlar asoslari (9/14).
+
+OHANG: o'rgatuvchi, ammo umumiy.
+
+MAZMUN:
+Endi qiziqarli qism — promptlar.
+
+Prompt — bu matn ko'rsatma. AI'ga aytasiz nima qilish kerak.
+
+3 ta asosiy element:
+1. Sahna — nima sodir bo'lyapti
+2. Personajlar — kim ishtirok etadi
+3. Kamera harakati — qanday suratga olinadi
+
+Misol (umumiy):
+"Cinematic shot, person walking through forest, slow motion, golden hour lighting"
+
+QAYDLAR:
+- Inglizcha yozing — yaxshi natija
+- Aniq bo'ling, ammo qisqa
+- Texnik so'zlar ishlating
+
+Promptlar bo'yicha menda alohida fayl bor — Instagram'da DM yozing, beraman.
+
+Keyingi kunlarda: har bir model uchun maxsus promptlar.
+
+Max 800 belgi.""",
+    
+    "video_prompts_kling": """AI-video seriyasi. Kling promptlari (10/14).
+
+OHANG: bilimdon.
+
+MAZMUN:
+KLING — uning o'ziga xos uslubi bor.
+
+Kling nimani yaxshi tushunadi:
+- Tabiiy harakatlar
+- Inson hissiyotlari
+- O'rta tezlikdagi sahnalar
+- Realistik portretlar
+
+Kling nimani yomon ko'radi:
+- Juda murakkab sahnalar
+- Tez harakatlar
+- Ko'p odam bir kadrda
+
+Maslahat:
+- Promptingiz qisqa bo'lsin
+- 1-2 ta asosiy harakat ko'rsating
+- Realizm uchun yorug'lik tafsilotlarini bering
+
+Aniq prompt namunalari ko'rsatmayman — bu mening shaxsiy mulkim. Ammo printsip aniq.
+
+Ertaga — Runway promptlari.
+
+Max 800 belgi.""",
+    
+    "video_prompts_runway": """AI-video seriyasi. Runway promptlari (11/14).
+
+OHANG: professional.
+
+MAZMUN:
+RUNWAY — texnik tilni yaxshi tushunadi.
+
+Runway uchun:
+- Texnik so'zlarni ishlating: focal length, aperture, depth of field
+- Aniq kamera harakatlari: dolly, crane, tracking shot
+- Yorug'lik turlarini ko'rsating: rim lighting, soft box
+
+Runway nimani yaxshi qiladi:
+- Professional shotlar
+- Murakkab harakat
+- Ko'p kameralik effektlar
+
+Maslahat:
+- Kino terminlarini o'rganing
+- YouTube'da "cinematography terms" ko'rib chiqing
+- Har bir kadr — bu bitta gap (1 prompt)
+
+Tayyor promptlar ko'rsatmayman, ammo printsip aniq.
+
+Ertaga — Sora promptlari.
+
+Max 800 belgi.""",
+    
+    "video_prompts_sora": """AI-video seriyasi. Sora promptlari (12/14).
+
+OHANG: chuqur.
+
+MAZMUN:
+SORA — uzun va batafsil promptlarni yaxshi tushunadi.
+
+Sora uchun:
+- 200-300 so'z prompt yozish mumkin
+- Hikoya tuzilishi muhim
+- Avval umumiy, keyin tafsilotlar
+- Hissiyotlar va kayfiyat — yozing
+
+Sora nimani yaxshi qiladi:
+- Hikoyali sahnalar
+- Realistik fizika
+- Murakkab interaksiyalar
+- Uzun videolar
+
+Maslahat:
+- Prompt yozishdan oldin sahnani aniq tasavvur qiling
+- Bosqichma-bosqich tasvirlang
+- Kino tilida o'ylang
+
+Aniq promptlarni ko'rsatmayman — Instagram'ga yozing, suhbatlashamiz.
+
+Ertaga — bepul kreditlar.
+
+Max 800 belgi.""",
+    
+    "video_free_credits": """AI-video seriyasi. Bepul kreditlar (13/14).
+
+OHANG: foydali, hayratlanarli.
+
+MAZMUN:
+Endi eng qiziq qism — bepul AI-video qayerdan olish.
+
+Hozir mavjud bepul variantlar:
+1. KLING — ro'yxatdan o'tib har kuni 30-60 kredit
+2. PIKA — boshlang'ich 30 kredit + kunlik bonuslar
+3. RUNWAY — har oy 125 kredit boshlang'ich
+4. HIGGSFIELD — boshlang'ich 75 kredit
+5. HAILUO — ko'p bepul kreditlar boshida
+6. LUMA AI — har kun ham beradi
+
+Eslatma: bu raqamlar o'zgarishi mumkin. Kompaniyalar siyosatini o'zgartiryapti.
+
+Maslahat: bir nechta servisda ro'yxatdan o'ting — yiqilish kreditlarini birga qo'shasiz.
+
+Ertaga — seriyaning so'nggi posti.
+
+Max 800 belgi.""",
+    
+    "video_summary": """AI-video seriyasi. Yakuni (14/14).
+
+OHANG: yakunlash, motivatsion, sotuvchi.
+
+MAZMUN:
+7 kun davomida o'rgandik:
+- 7 ta AI-video modeli
+- Har birining afzalliklari
 - Narxlar
-- Qaysi tarif tavsiya (Standard $30)
-- Qanday boshlash (sayt orqali)
-- 2-3 hashtag
+- Bepul imkoniyatlar
+- Promptlar asoslari
 
-Max 1000 belgi.""",
+Endi savol: keyingi qadam nima?
 
-    "mj_business": """Midjourney 2-post. Mavzu: vs NANO BANANA + BIZNES UCHUN + QACHON KERAK EMAS.
+3 ta yo'l:
+1. O'zingiz o'rganib boring (1-3 oy vaqt)
+2. Kursga yoziling ($500-1500)
+3. Men sizga tayyor video qilib beraman ($50-300)
 
-OHANG: tajribali maslahatchi, halol.
+Brendingiz uchun AI-reklama kerakmi? Yozing Instagram'da DM: link CTA'da bo'ladi.
 
-MAZMUN:
-1. Farq: Midjourney — kinematografik, premium, badiiy. Nano Banana — tezroq, texnik.
-2. Biznes uchun: reklama, brand-kontent, mahsulot katalogi, Instagram.
-3. KERAK EMAS: aniq odam yuzi, rasm ichida matn, juda ko'p rasm tez, byudjet yo'q.
+Bu seriya yakunlandi. Ertaga oddiy mavzular boshlanadi.
 
-STRUKTURA:
-- Sarlavha
-- Farqi nimada
-- Biznes foydasi
-- Qachon kerak emas (halol)
-- 2-3 hashtag
-
-Max 1000 belgi.""",
-
-    "mj_advertising": """Midjourney 3-post. Mavzu: REKLAMA vs ART + MAHSULOT HIKOYASI.
-
-MAZMUN:
-1. Midjourney yaxshi qiladi: ART (kinematografik), REKLAMA (premium).
-2. Boshqalar yaxshiroq: tez mahsulot — Nano Banana, portret — Flux.
-3. Hikoya (ismsiz): brend ko'p sarflagan, foyda kichik. Midjourney bilan vizual qayta qilingan, sotuv 2 baravar oshgan.
-
-STRUKTURA:
-- Sarlavha
-- Midjourney nimani yaxshi qiladi
-- Boshqalar nimani yaxshi qiladi
-- Hikoya
-- Xulosa
-- 2-3 hashtag
-
-Max 1000 belgi.""",
-
-    "mj_summary": """Midjourney 4-post. Mavzu: KIMGA KERAK — XULOSA.
-
-KERAK: premium vizual, SMM, dizayner, reklama agentligi, Instagram kontent.
-KERAK EMAS: birinchi sinov, byudjet yo'q, faqat kundalik rasmlar, texnik aniqlik.
-TAVSIYA: Standard $30 boshlash. Pro $60 jiddiy ish. Yillik -20%.
-
-STRUKTURA:
-- Sarlavha
-- Kimga kerak
-- Kimga kerak emas
-- Tavsiya
-- Yakun
-- 2-3 hashtag
-
-Max 1000 belgi.""",
-
-    # ===== УРОК 5: КАК ПИСАТЬ ПРОМПТЫ =====
-    "mj_prompts_howto": """Midjourney 5-post. MUHIM DARS: Promptni qanday yozish kerak.
-
-MAQSAD: O'qituvchanlik, lekin AYNAN tayyor prompt yozmasdan!
-DIQQAT: misol berishingiz mumkin, lekin u TO'LIQ tayyor prompt bo'lmasin — UMUMIY tushuncha.
-
-MAZMUN:
-
-1. Prompt nima:
-- Sizning fikringizni AI'ga tushuntirish usuli
-- To'g'ri yozsangiz — chiroyli natija
-
-2. Prompt tuzilmasi (4 element):
-- Asosiy mavzu (nima rasm)
-- Uslub (cinematic, illustration, photo, art)
-- Atmosfera (yorug'lik, kayfiyat)
-- Texnik detallar (4K, sharp)
-
-3. Asosiy qoidalar:
-- Inglizcha yozing — natija yaxshiroq
-- Iboralarni vergul bilan ajrating
-- 2-3 tasvirlovchi so'z yetadi
-- Ortiqcha so'zlar chalkashtiradi
-
-4. Maslahat: ChatGPT yoki Claude prompt yozishga yordam beradi
-- Ammo natijani tekshiring — taqiqlangan so'zlar bo'lishi mumkin
-- Ertaga: TAQIQLANGAN so'zlar ro'yxati
-
-STRUKTURA:
-- Sarlavha (emoji)
-- Prompt nima
-- 4 elementi
-- Asosiy qoidalar
-- Anons: ertaga taqiqlangan so'zlar
-- 2-3 hashtag
-
-MUHIM: aniq tayyor promptni misol qilib yozmang!
-Max 1000 belgi.""",
-
-    # ===== УРОК 6: БАН-ЛИСТ =====
-    "mj_banned_words": """Midjourney 6-post. JUDA MUHIM: TAQIQLANGAN SO'ZLAR — akkaunt blokirovkadan saqlash.
-
-OHANG: jiddiy, ogohlantirish.
-
-MAZMUN:
-
-KIRISH: Midjourney qattiq filtr ishlatadi. Taqiqlangan so'z = prompt rad etiladi. Qayta urinish = akkaunt bloklanadi.
-
-TAQIQLANGAN KATEGORIYALAR:
-
-1. ZO'RAVONLIK / QON
-Misol so'zlar (inglizcha): blood, gore, dead, wound, severed, kill, weapon
-Almashtiring: "dark fantasy", "dramatic atmosphere"
-
-2. KATTALAR KONTENTI
-Misol: nude, naked, sexy, erotic, porn
-DIQQAT: filtr hatto "voluptuous", "provocative", "scantily clad" so'zlarini ham tutadi
-Almashtiring: "elegant portrait", "graceful pose"
-
-3. KIYIM (ochiq)
-Misol: lingerie, see-through, revealing
-Almashtiring: "fashionable outfit", "stylish dress"
-
-4. NARKOTIKLAR
-Misol: cocaine, heroin, meth, weed
-Almashtiring: "psychedelic", "neon glow"
-
-5. NAFRAT VA KAMSITISH
-Irqchilik, kamsituvchi so'zlar — taqiqlangan
-
-6. REAL ODAMLAR
-Mashhur siyosatchilar — ehtiyot bo'ling, ayniqsa salbiy kontekstda
-
-MUHIM ESLATMA:
-- Filtr SINONIMLARNI ham tutadi
-- Boshqacha yozish ishlamaydi
-- Filtrni aldashga urinmang — akkaunt bloklanadi
-- "Bobongizga ko'rsata olmaydigan" mavzulardan saqlaning
-- Midjourney PG-13 standartda ishlaydi
-
-XULOSA: ijodiy alternatif so'zlar toping. Akkauntingizni asrang.
-
-STRUKTURA:
-- Sarlavha (ogohlantirish emoji)
-- Nima uchun muhim
-- 6 ta kategoriya (har biriga 1-2 misol va alternatif)
-- Eslatma
-- Xulosa
-- 2-3 hashtag
-
-Max 1300 belgi (caption uchun ko'proq).""",
-
-    "mj_versions": """Midjourney 7-post. Mavzu: VERSIYALAR — V6, V7.
-
-MAZMUN:
-- V1 dan V7 gacha rivojlangan
-- V6.1 — 2025 oxir, barqaror
-- V7 — 2026 yangi, eng kuchli
-- V7 yaxshiliklari: aniqroq yuz, qo'l, matn, yaxshi kompozitsiya
-- Eski versiyalar mavjud
-- Tavsiya: V7 yangi loyiha, V6 barqaror natija
-
-STRUKTURA:
-- Sarlavha
-- Versiyalar tarixi
-- V6 vs V7
-- Qaysisini tanlash
-- 2-3 hashtag
-
-Max 900 belgi.""",
-
-    "mj_niji": """Midjourney 8-post. Mavzu: NIJI MODE — anime va illyustratsiya.
-
-MAZMUN:
-- Niji — maxsus rejim
-- Anime, manga, illyustratsiya
-- Yaponcha estetika
-- Bolalar kitoblari, mascot uchun ideal
-- Niji vs oddiy: yumshoq, yorqin ranglar
-- Qachon: anime, illyustratsiya zarurat
-
-STRUKTURA:
-- Sarlavha
-- Niji nima
-- Qachon ishlatish
-- Misol vaziyatlar
-- 2-3 hashtag
-
-Max 900 belgi.""",
-
-    "mj_stealth": """Midjourney 9-post. Mavzu: STEALTH MODE — biznes uchun maxfiylik.
-
-MAZMUN:
-- Pro va Mega tariflarda
-- Rasmlaringiz boshqalar ko'ra olmaydi
-- NDA loyihalar, mahsulot launch, patent himoyasi
-- Oddiy tariflarda — ish ommaviy
-- Agentliklar va studiyalar uchun
-
-STRUKTURA:
-- Sarlavha
-- Stealth Mode nima
-- Kimga kerak
-- Qaysi tarifda
-- 2-3 hashtag
-
-Max 900 belgi.""",
-
-    "mj_modes": """Midjourney 10-post. Mavzu: RELAX vs FAST.
-
-MAZMUN:
-- Fast: 30-60 soniya, GPU soati hisobiga
-- Relax: 1-10 daqiqa, cheksiz (Standard'dan)
-- Fast — shoshilinch, Relax — eksperiment
-- Basic — faqat Fast (200 rasm)
-- Strategiya: muhim — Fast, qidiruv — Relax
-
-STRUKTURA:
-- Sarlavha
-- Ikki rejim farqi
-- Qachon Fast / Relax
-- 2-3 hashtag
-
-Max 900 belgi.""",
-
-    "mj_discord_web": """Midjourney 11-post. Mavzu: Discord vs veb-sayt.
-
-MAZMUN:
-- Avval faqat Discord edi
-- 2024-2025 veb-sayt to'liq ishga tushdi
-- Sayt: qulay, galereya, tahrirlash
-- Discord: tezroq, jamoa
-- Yangilar — saytdan, tajribali — ikkala joyda
-- Hisob bir xil
-
-STRUKTURA:
-- Sarlavha
-- Discord tarixi
-- Veb-sayt afzalliklari
-- Qaysi tanlash
-- 2-3 hashtag
-
-Max 900 belgi.""",
-
-    "mj_parameters": """Midjourney 12-post. Mavzu: PARAMETRLAR — umumiy tushuncha.
-
-DIQQAT: aniq parametr kodlarini yozmang!
-
-MAZMUN:
-- Parametrlar — rasm boshqaruvi
-- Asosiy: o'lcham, uslub kuchi, variatsiyalar, versiyalar
-- Yangilar — parametrsiz boshlasin
-- Tajriba bilan o'rganib boriladi
-
-STRUKTURA:
-- Sarlavha
-- Parametrlar nima
-- Asosiy turlari
-- Maslahat
-- 2-3 hashtag
-
-Max 900 belgi.""",
-
-    "mj_styles": """Midjourney 13-post. Mavzu: USLUBLAR.
-
-USLUBLAR:
-- Fotorealistik
-- Cinematic
-- Illustration
-- Anime/manga
-- Vintage/retro
-- Minimalistik
-- Abstract
-- 3D render
-- Watercolor
-
-QACHON QAYSI:
-- Reklama — fotorealistik, cinematic
-- Bolalar — illustration, anime
-- Brend — minimalist
-
-STRUKTURA:
-- Sarlavha
-- Uslublar
-- Qachon qaysi
-- 2-3 hashtag
-
-Max 900 belgi.""",
-
-    "mj_instagram": """Midjourney 14-post. Mavzu: INSTAGRAM kontenti.
-
-MAZMUN:
-- Stories vizuallari
-- Reels fonlari
-- Carousel postlar
-- Highlight cover
-- Reklama kreativlari
-
-Formatlar: 9:16 (Stories), 1:1 (post), 4:5 (post)
-Strategiya: bir uslub — vizual brending
-Maslahat: 5-10 rasm tayyor, haftaga yetadi
-
-STRUKTURA:
-- Sarlavha
-- Qayerda ishlatish
-- Formatlar
-- Strategiya
-- 2-3 hashtag
-
-Max 900 belgi.""",
-
-    "mj_mistakes": """Midjourney 15-post. Mavzu: TOP-5 XATO.
-
-5 XATO:
-1. Birinchi natijaga ishonish — 5-10 marta sinab ko'ring
-2. Juda ko'p detal — oddiy boshlang
-3. Sifatga e'tibor yo'q — Standard minimum
-4. Bitta uslub — eksperiment qiling
-5. Galereya o'rganmaslik — boshqalar ishidan ilhom
-
-STRUKTURA:
-- Sarlavha
-- 5 xato
-- Asosiy maslahat
-- 2-3 hashtag
-
-Max 900 belgi.""",
-
-    "mj_tips": """Midjourney 16-post. Mavzu: PROFESSIONAL maslahatlar.
-
-5 MASLAHAT:
-1. Bir loyiha uchun bir uslubni saqlang
-2. Ranglar palitrasini oldindan tanlang
-3. Referans rasmlar yig'ing
-4. Yaxshi natijani galereyaga saqlang
-5. Discord'da boshqa ijodkorlar ishini kuzating
-
-STRUKTURA:
-- Sarlavha
-- 5 maslahat
-- Yakun
-- 2-3 hashtag
-
-Max 900 belgi.""",
-
-    "mj_advanced": """Midjourney 17-post. Mavzu: KEYINGI BOSQICH — qachon Midjourney'dan o'tib boshqaga.
-
-MAZMUN:
-- Midjourney — boshlang'ich va o'rta daraja uchun ideal
-- Professional ish uchun qo'shimcha vositalar:
-  • Photoshop — yakuniy ishlov
-  • Topaz — sifat oshirish
-  • Krea — real-time generatsiya
-  • Flux — alternatif AI
-- Midjourney + Photoshop = professional natija
-- Faqat AI'ga tayanmang — qo'l ishlovi muhim
-
-STRUKTURA:
-- Sarlavha
-- Midjourney imkoniyatlari chegarasi
-- Qo'shimcha vositalar
-- Maslahat
-- 2-3 hashtag
-
-Max 900 belgi.""",
-
-    "mj_week_summary": """Midjourney 18-post. HAFTA YAKUNI.
-
-MAZMUN:
-9 kunlik darslar haqida qisqacha:
-- Tanishuv, narxlar
-- Biznes uchun
-- Promptlar va taqiqlangan so'zlar
-- Versiyalar, Niji, Stealth
-- Rejimlar, parametrlar
-- Uslublar, Instagram
-- Xatolar va maslahatlar
-
-KEYINGI HAFTA: AI-soha yangiliklari va trendlari.
-
-RAHMAT: obunachilarga minnatdorchilik. 100 obunachiga yetishimizga yordam bering.
-
-STRUKTURA:
-- Sarlavha (yakun emoji)
-- Nima o'rgandik
-- Keyingisi nima
-- Rahmat va so'rov
-- 2-3 hashtag
-
-Max 1000 belgi.""",
-
-    # ===== ОБЫЧНЫЕ ТЕМЫ =====
-
-    "news": """AI-soha yangiligi posti.
-
-Mavzu: umumiy AI yangiligi yoki trendi (Midjourney emas, agent emas).
-
-OHANG: insayder.
-
-STRUKTURA:
-- Sarlavha (emoji)
-- Yangilik (2-3 gap)
-- Nima uchun qiziq
-- 2-3 hashtag
-
-Max 600 belgi.""",
-
-    "insight": """Insayt posti.
-
-OHANG: kuzatuv.
-
-Mavzu: AI yoki marketing (agentlar emas).
-
-STRUKTURA:
-- Sarlavha
-- Kuzatuv (3-4 gap)
-- Xulosa
-- 2-3 hashtag
-
-Max 600 belgi.""",
-
-    "reflection": """Mulohaza posti.
-
-OHANG: shaxsiy, do'stona.
-
-Mavzu: AI ijodi, kelajak.
-
-STRUKTURA:
-- Sarlavha
-- Mulohaza (3-4 gap)
-- Savol
-- 2-3 hashtag
-
-Max 600 belgi.""",
-
-    "trend": """Trend haqida.
-
-Mavzu: AI yoki marketing trendi (agent emas).
-
-STRUKTURA:
-- Sarlavha
-- Trend
-- Nima uchun muhim
-- 2-3 hashtag
-
-Max 600 belgi.""",
-
-    "story": """Hikoya posti (ismsiz, umumiy).
-
-STRUKTURA:
-- Sarlavha
-- Vaziyat
-- Voqea
-- Natija
-- 2-3 hashtag
+Rahmat hammangizga — birga o'rgandik.
 
 Max 800 belgi.""",
-
-    "case": """Keys-post (ismsiz).
-
-STRUKTURA:
-- Sarlavha
-- Muammo
-- Yechim
-- Natija
-- 2-3 hashtag
-
-Max 800 belgi.""",
-
-    "weekend_reflection": """Dam olish kuni mulohazasi.
-
-OHANG: yengil.
-
-STRUKTURA:
-- Sarlavha
-- Mulohaza (3-4 gap)
-- 2-3 hashtag
-
-Max 500 belgi.""",
-
-    "easy_post": """Yengil yakshanba posti.
-
-OHANG: iliq.
-
-STRUKTURA:
-- Sarlavha
-- Fikr (2-3 gap)
-- 2 hashtag
-
-Max 400 belgi.""",
-
-    "tool_review": """AI-vosita sharhi (Midjourney EMAS, agent EMAS).
-
-Tavsiya: Suno AI, Flux, ChatGPT, Runway, Pika, ElevenLabs, Adobe Firefly.
-
-STRUKTURA:
-- Sarlavha
-- Vosita nomi
-- Afzalliklari
-- Narxi (umumiy)
-- 2-3 hashtag
-
-Max 700 belgi.""",
 }
 
 
 # ============================================
-# ГЕНЕРАЦИЯ
+# ВЫБОР ТИПА ПОСТА ПО СЕРИЯМ
+# ============================================
+
+def get_post_type(time_of_day: str) -> str:
+    tashkent_tz = timezone(timedelta(hours=5))
+    today = datetime.now(tashkent_tz).date()
+    
+    # СЕРИЯ CRM (23 мая = 1 день, 2 поста)
+    crm_days = (today - SERIES_CRM_START).days
+    if 0 <= crm_days < SERIES_CRM_DAYS:
+        post_type = CRM_SERIES.get((crm_days, time_of_day))
+        if post_type:
+            logger.info(f"🎯 Серия CRM: день {crm_days+1}/{SERIES_CRM_DAYS}, {time_of_day}")
+            return post_type
+    
+    # СЕРИЯ AI-ВИДЕО (24-30 мая = 7 дней, 14 постов)
+    video_days = (today - SERIES_VIDEO_START).days
+    if 0 <= video_days < SERIES_VIDEO_DAYS:
+        post_type = VIDEO_SERIES.get((video_days, time_of_day))
+        if post_type:
+            logger.info(f"🎯 Серия Видео: день {video_days+1}/{SERIES_VIDEO_DAYS}, {time_of_day}")
+            return post_type
+    
+    # После серий — обычные темы (пока возвращаем "video_intro" как заглушку)
+    logger.info(f"📝 Обычная тема ({time_of_day})")
+    return "general"
+
+
+# ============================================
+# ГЕНЕРАЦИЯ ПОСТА ЧЕРЕЗ CLAUDE
 # ============================================
 
 def generate_post(post_type: str) -> str:
     client = Anthropic(api_key=ANTHROPIC_API_KEY)
     
-    base_prompt = POST_PROMPTS.get(post_type, POST_PROMPTS["news"])
+    base_prompt = POST_PROMPTS.get(post_type)
+    
+    if not base_prompt:
+        # Обычный пост (после серий)
+        base_prompt = """AI haqida umumiy post.
+
+OHANG: jonli, do'stona.
+
+Mavzular: yangi AI vositalar, trendlar, biznesda AI, marketing.
+
+OG'IZMA: aniq prompt, AI-agent, ChatGPT'da nima qilish — YO'Q.
+
+STRUKTURA:
+- Sarlavha emoji bilan
+- 3-4 abzats
+- Xulosa yoki savol
+
+Max 700 belgi."""
+    
     full_prompt = base_prompt + GLOBAL_RULE
     
     message = client.messages.create(
@@ -851,18 +1315,40 @@ def generate_post(post_type: str) -> str:
     )
     
     text = message.content[0].text
+    
+    # Определяем тему для хештегов
+    if "crm" in post_type:
+        topic = "crm"
+    elif "video" in post_type:
+        topic = "video"
+    else:
+        topic = "general"
+    
+    hashtags = "\n\n" + get_hashtags(topic=topic)
     cta = get_cta()
-    return text + cta
+    
+    return text + cta + hashtags
 
 
 # ============================================
-# КАРТИНКА
+# КАРТИНКА ЧЕРЕЗ UNSPLASH
 # ============================================
+
+IMAGE_QUERIES = {
+    "crm": ["business technology", "office work", "automation"],
+    "video": ["video production", "camera cinema", "filmmaking"],
+    "default": ["technology", "future", "innovation", "AI"],
+}
 
 def get_image_url(post_type: str) -> str:
-    themes = IMAGE_THEMES.get(post_type, ["technology"])
-    query = random.choice(themes)
+    if "crm" in post_type:
+        queries = IMAGE_QUERIES["crm"]
+    elif "video" in post_type:
+        queries = IMAGE_QUERIES["video"]
+    else:
+        queries = IMAGE_QUERIES["default"]
     
+    query = random.choice(queries)
     url = "https://api.unsplash.com/photos/random"
     headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
     params = {"query": query, "orientation": "landscape"}
@@ -878,27 +1364,7 @@ def get_image_url(post_type: str) -> str:
 
 
 # ============================================
-# ВЫБОР ТЕМЫ
-# ============================================
-
-def get_post_type(time_of_day: str) -> str:
-    tashkent_tz = timezone(timedelta(hours=5))
-    today = datetime.now(tashkent_tz).date()
-    
-    days_from_start = (today - SERIES_START_DATE).days
-    
-    if 0 <= days_from_start < SERIES_DAYS:
-        post_type = MIDJOURNEY_SERIES.get((days_from_start, time_of_day))
-        if post_type:
-            logger.info(f"🎯 Серия Midjourney: день {days_from_start+1}/{SERIES_DAYS}, {time_of_day}")
-            return post_type
-    
-    weekday = datetime.now(tashkent_tz).weekday()
-    return POST_SCHEDULE.get((weekday, time_of_day), "news")
-
-
-# ============================================
-# ПУБЛИКАЦИЯ
+# ПУБЛИКАЦИЯ — ОСНОВНОЙ ПОСТ (13:00 и 19:00)
 # ============================================
 
 async def publish_post(time_of_day: str = "morning"):
@@ -909,31 +1375,24 @@ async def publish_post(time_of_day: str = "morning"):
         text = generate_post(post_type)
         logger.info(f"✅ Текст сгенерирован, {len(text)} символов")
         
-        image_url = get_image_url(post_type)
-        
-        bot = Bot(token=BOT_TOKEN)
-        
-        # УМНАЯ обрезка по предложениям (не обрывает на середине слова)
+        # Защита от слишком длинных постов
         if len(text) > 1024:
-            # Обрезаем до 1010 чтобы был запас
             truncated = text[:1010]
-            
-            # Ищем последний знак конца предложения
             last_dot = max(
                 truncated.rfind('.'),
                 truncated.rfind('!'),
                 truncated.rfind('?'),
                 truncated.rfind('\n\n')
             )
-            
-            if last_dot > 500:  # если нашли осмысленную точку
+            if last_dot > 500:
                 text = truncated[:last_dot + 1]
             else:
-                # обрезаем по последнему слову
                 last_space = truncated.rfind(' ')
                 text = truncated[:last_space] + '.'
-            
             logger.warning(f"⚠️ Текст обрезан до {len(text)} символов")
+        
+        image_url = get_image_url(post_type)
+        bot = Bot(token=BOT_TOKEN)
         
         if image_url:
             await bot.send_photo(
@@ -954,46 +1413,88 @@ async def publish_post(time_of_day: str = "morning"):
 
 
 async def publish_morning():
+    """Утренний пост в 13:00 Ташкент (8:00 UTC)"""
     await publish_post("morning")
 
 
 async def publish_evening():
+    """Вечерний пост в 19:00 Ташкент (14:00 UTC)"""
     await publish_post("evening")
 
 
 # ============================================
-# УТРЕННЕЕ ПРИВЕТСТВИЕ (7:00) — без картинки
+# ПРИВЕТСТВИЕ — 7:00 Ташкент (2:00 UTC)
 # ============================================
 
 async def publish_greeting():
-    """Публикует короткое приветствие в 7:00 по Ташкенту."""
     try:
-        tashkent_tz = timezone(timedelta(hours=5))
-        weekday = datetime.now(tashkent_tz).weekday()
-        
-        greeting = MORNING_GREETINGS.get(weekday, MORNING_GREETINGS[0])
+        greeting = get_morning_greeting()
+        # Добавляем хештеги
+        hashtags = "\n\n" + get_hashtags(topic="general")
         
         bot = Bot(token=BOT_TOKEN)
         await bot.send_message(
             chat_id=CHANNEL_USERNAME,
-            text=greeting
+            text=greeting + hashtags
         )
         
-        logger.info(f"✅ Утреннее приветствие опубликовано (день {weekday})")
+        logger.info("✅ Утреннее приветствие опубликовано")
         
     except Exception as e:
         logger.error(f"❌ Ошибка приветствия: {e}")
 
 
 # ============================================
-# ОПРОС (3 раза в неделю — Пн, Ср, Пт в 20:00)
+# ДНЕВНОЙ ПОСТ — 17:00 Ташкент (12:00 UTC) — AI новости
+# ============================================
+
+# Индекс для последовательной публикации (не повторяться сразу)
+_daily_post_index = 0
+
+async def publish_daily_ai_post():
+    """Публикует один из 30 готовых AI постов в 17:00."""
+    global _daily_post_index
+    
+    try:
+        # Берём пост по индексу
+        post_text = DAILY_AI_POSTS[_daily_post_index % len(DAILY_AI_POSTS)]
+        _daily_post_index += 1
+        
+        # Добавляем CTA и хештеги
+        cta = get_cta()
+        hashtags = "\n\n" + get_hashtags(topic="news")
+        
+        full_text = post_text + cta + hashtags
+        
+        # Картинка
+        image_url = get_image_url("default")
+        bot = Bot(token=BOT_TOKEN)
+        
+        if image_url:
+            await bot.send_photo(
+                chat_id=CHANNEL_USERNAME,
+                photo=image_url,
+                caption=full_text
+            )
+        else:
+            await bot.send_message(
+                chat_id=CHANNEL_USERNAME,
+                text=full_text
+            )
+        
+        logger.info(f"✅ Дневной AI пост опубликован (индекс {_daily_post_index})")
+        
+    except Exception as e:
+        logger.error(f"❌ Ошибка дневного поста: {e}")
+
+
+# ============================================
+# ОПРОСЫ
 # ============================================
 
 async def publish_poll():
-    """Публикует опрос (раз в 2-3 дня)."""
     try:
         poll = random.choice(POLLS)
-        
         bot = Bot(token=BOT_TOKEN)
         await bot.send_poll(
             chat_id=CHANNEL_USERNAME,
@@ -1001,42 +1502,49 @@ async def publish_poll():
             options=poll["options"],
             is_anonymous=True
         )
-        
-        logger.info(f"✅ Опрос опубликован: {poll['question']}")
+        logger.info("✅ Опрос опубликован!")
         
     except Exception as e:
         logger.error(f"❌ Ошибка опроса: {e}")
 
 
+# ============================================
+# KEEP-ALIVE
+# ============================================
+
 async def keep_alive_ping():
-    tashkent_tz = timezone(timedelta(hours=5))
-    current_time = datetime.now(tashkent_tz).strftime("%H:%M:%S")
-    logger.info(f"💚 Keep-alive — Ташкент: {current_time}")
+    try:
+        tashkent_tz = timezone(timedelta(hours=5))
+        now = datetime.now(tashkent_tz).strftime("%H:%M:%S")
+        logger.info(f"💚 Keep-alive — Ташкент: {now}")
+    except Exception as e:
+        logger.error(f"Keep-alive error: {e}")
 
 
 # ============================================
-# ЗАПУСК
+# MAIN
 # ============================================
 
 async def main():
     if PUBLISH_ON_STARTUP:
         logger.info("🧪 Тестовая публикация при запуске...")
-        tashkent_tz = timezone(timedelta(hours=5))
-        current_hour = datetime.now(tashkent_tz).hour
-        time_of_day = "morning" if current_hour < 14 else "evening"
-        await publish_post(time_of_day)
+        await publish_post("morning")
     
-    scheduler = AsyncIOScheduler(timezone="Asia/Tashkent")
+    scheduler = AsyncIOScheduler(timezone="UTC")
     
-    # Утреннее приветствие в 7:00 (без картинки, с вопросом)
+    # ===== РАСПИСАНИЕ (UTC время) =====
+    # ВАЖНО: бот работает по UTC, не по Tashkent
+    # Ташкент = UTC + 5
+    
+    # 7:00 Ташкент = 2:00 UTC — Утреннее приветствие
     scheduler.add_job(
         publish_greeting,
-        CronTrigger(hour=7, minute=0),
-        id="morning_greeting",
+        CronTrigger(hour=2, minute=0),
+        id="greeting",
         replace_existing=True
     )
     
-    # Основной утренний пост (фактически в 13:00 Ташкент = 8:00 UTC)
+    # 13:00 Ташкент = 8:00 UTC — Утренний пост (серия)
     scheduler.add_job(
         publish_morning,
         CronTrigger(hour=8, minute=0),
@@ -1044,15 +1552,23 @@ async def main():
         replace_existing=True
     )
     
-    # Основной вечерний пост (фактически в 00:00 Ташкент = 19:00 UTC)
+    # 17:00 Ташкент = 12:00 UTC — Дневной AI пост
+    scheduler.add_job(
+        publish_daily_ai_post,
+        CronTrigger(hour=12, minute=0),
+        id="daily_ai",
+        replace_existing=True
+    )
+    
+    # 19:00 Ташкент = 14:00 UTC — Вечерний пост (серия)
     scheduler.add_job(
         publish_evening,
-        CronTrigger(hour=19, minute=0),
+        CronTrigger(hour=14, minute=0),
         id="evening_post",
         replace_existing=True
     )
     
-    # Опросы 3 раза в неделю: Пн, Ср, Пт в 20:00 Ташкент (15:00 UTC)
+    # Опросы: Пн, Ср, Пт в 20:00 Ташкент = 15:00 UTC
     scheduler.add_job(
         publish_poll,
         CronTrigger(day_of_week="mon,wed,fri", hour=15, minute=0),
@@ -1069,7 +1585,8 @@ async def main():
     )
     
     scheduler.start()
-    logger.info("🚀 Бот запущен. 3 поста в день + опросы 3 раза в неделю.")
+    logger.info("🚀 Бот запущен v2.0. 4 поста в день + опросы 3 раза в неделю.")
+    logger.info("📅 Расписание (Ташкент): 7:00 / 13:00 / 17:00 / 19:00")
     
     while True:
         await asyncio.sleep(60)
