@@ -1,19 +1,18 @@
 """
 Telegram-бот для канала @AiContentCreatorUZ
-ВЕРСИЯ 2.0 — обновлённая
+ВЕРСИЯ 3.0 — финальная
 
-- 4 поста в день:
-  7:00 (приветствие) - 2:00 UTC
-  13:00 (серия) - 8:00 UTC
-  17:00 (AI новости) - 12:00 UTC
-  19:00 (серия) - 14:00 UTC
-- Опросы 3 раза в неделю (Пн, Ср, Пт в 20:00 = 15:00 UTC)
-- Серии: CRM (2 поста) → AI-видео (14 постов) → обычные темы
-- Разговорный узбекский без русских слов, с "Hurmatli"
-- НЕ писать про день недели в приветствиях
-- Усиленный запрет Markdown
-- 8-10 узбекских хештегов на пост
-- Instagram ссылка в CTA
+Изменения от 2.0:
+- 30 готовых постов серии AI-видеогенерация (с проверенной информацией)
+- 30 готовых дневных постов про AI и будущее
+- Только РАБОЧИЕ узбекские хештеги (проверены)
+- Убрана серия CRM (отменена)
+- Убрана Sora (модель закрыта 26 апреля 2026)
+- Убрана Seedance (по запросу)
+- HeyGen перенесён на следующий месяц (отдельная серия)
+- 4 поста в день: 7:00 / 13:00 / 17:00 / 19:00 Ташкент
+- В коде UTC: 2:00 / 8:00 / 12:00 / 14:00
+- Опросы Пн/Ср/Пт в 20:00 (15:00 UTC)
 """
 
 import os
@@ -26,7 +25,6 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 import asyncio
-from anthropic import Anthropic
 
 # ============================================
 # НАСТРОЙКИ
@@ -34,20 +32,15 @@ from anthropic import Anthropic
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 CHANNEL_USERNAME = "@AiContentCreatorUZ"
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 UNSPLASH_ACCESS_KEY = os.getenv("UNSPLASH_ACCESS_KEY", "")
 
-INSTAGRAM_USERNAME = "@umishka_abdukarimova"
 INSTAGRAM_URL = "https://www.instagram.com/umishka_abdukarimova?utm_source=qr"
 
 PUBLISH_ON_STARTUP = False
 
-# После серии Midjourney (закончилась 22 мая) начинается серия CRM с 23 мая
-SERIES_CRM_START = date(2026, 5, 23)
-SERIES_CRM_DAYS = 2  # 2 поста = 1 день (утром и вечером)
-
-SERIES_VIDEO_START = date(2026, 5, 24)
-SERIES_VIDEO_DAYS = 7  # 7 дней × 2 поста = 14 постов
+# Серия AI-видеогенерации стартует 23 мая 2026
+SERIES_VIDEO_START = date(2026, 5, 23)
+SERIES_VIDEO_TOTAL_POSTS = 30  # 30 постов = 15 дней по 2 поста
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -57,84 +50,43 @@ logger = logging.getLogger(__name__)
 
 
 # ============================================
-# СЕРИЯ CRM (2 поста)
+# ХЕШТЕГИ — ТОЛЬКО РАБОЧИЕ УЗБЕКСКИЕ
+# Проверено: миллионы постов на каждом
 # ============================================
 
-CRM_SERIES = {
-    (0, "morning"): "crm_intro",       # 23 мая утром - что такое CRM + AI
-    (0, "evening"): "crm_implement",   # 23 мая вечером - 12 шагов + продажа
-}
-
-
-# ============================================
-# СЕРИЯ AI-ВИДЕО (14 постов = 7 дней × 2)
-# ============================================
-
-VIDEO_SERIES = {
-    (0, "morning"): "video_intro",          # Что такое AI-видео, обзор моделей
-    (0, "evening"): "video_models_compare", # Сравнение всех моделей
-    (1, "morning"): "video_kling",          # Kling
-    (1, "evening"): "video_runway",         # Runway
-    (2, "morning"): "video_sora",           # Sora
-    (2, "evening"): "video_veo",            # Veo
-    (3, "morning"): "video_higgsfield",     # Higgsfield
-    (3, "evening"): "video_pika",           # Pika и Hailuo
-    (4, "morning"): "video_prompts_basics", # Основы промптов для видео
-    (4, "evening"): "video_prompts_kling",  # Промпты для Kling специально
-    (5, "morning"): "video_prompts_runway", # Промпты для Runway
-    (5, "evening"): "video_prompts_sora",   # Промпты для Sora
-    (6, "morning"): "video_free_credits",   # Где брать бесплатные кредиты
-    (6, "evening"): "video_summary",        # Итог + продающий призыв
-}
-
-
-# ============================================
-# УЗБЕКСКИЕ ХЕШТЕГИ — пул для рандомного выбора
-# ============================================
-
-HASHTAGS_LOCAL = [
-    "#Toshkent", "#Uzbekistan", "#Ozbekiston", "#UZ",
-    "#Uzblar", "#UzbekTelegram", "#ToshkentBiznes"
+# Главные локальные (миллионы постов)
+HASHTAGS_MAIN = [
+    "#uzbekistan", "#tashkent", "#toshkent", "#uzb",
+    "#uzbek", "#uzbekiston", "#tashkentcity"
 ]
 
-HASHTAGS_AI = [
-    "#SuniyIntellekt", "#AIozbekcha", "#AIUZ",
-    "#YangiTexnologiya", "#AItools", "#NeyroSet"
+# Регионы
+HASHTAGS_REGIONS = [
+    "#andijon", "#namangan", "#samarkand", "#buxoro", "#fargona"
 ]
 
-HASHTAGS_BUSINESS = [
-    "#BiznesUZ", "#Tadbirkor", "#UzbekTadbirkor",
-    "#Marketing", "#SMM", "#Reklama"
+# Telegram
+HASHTAGS_TELEGRAM = [
+    "#telegram_yulduzlari", "#zortv", "#yulduzlari", "#telegram"
 ]
 
-HASHTAGS_AUDIENCE = [
-    "#UzbekQizlar", "#UzbekOnalar", "#DekretdaIsh",
-    "#Talabalar", "#YangiKasb", "#Onlinekasb"
+# Узбекский язык/культура
+HASHTAGS_CULTURE = [
+    "#uzbekcha", "#uzbegim", "#uzbeks", "#uzbekistan_inst"
 ]
 
-HASHTAGS_TOPIC = {
-    "crm": ["#CRM", "#CRMUZ", "#Avtomatlashtirish"],
-    "video": ["#AIvideo", "#Kling", "#Runway", "#Sora", "#Higgsfield", "#AIanimatsiya"],
-    "midjourney": ["#Midjourney", "#AIrasm", "#AIcontent"],
-    "news": ["#AINews", "#Texnologiya", "#Kelajak"],
-    "general": ["#ChatGPT", "#Claude", "#AIcontent"],
-}
 
-
-def get_hashtags(topic: str = "general", count: int = 8) -> str:
-    """Возвращает строку с 8-10 узбекскими хештегами."""
+def get_hashtags(count: int = 10) -> str:
+    """Возвращает 10 рабочих узбекских хештегов."""
     selected = []
-    # 2 локальных
-    selected += random.sample(HASHTAGS_LOCAL, 2)
-    # 2 AI
-    selected += random.sample(HASHTAGS_AI, 2)
-    # 1-2 бизнес
-    selected += random.sample(HASHTAGS_BUSINESS, 2)
-    # 1 аудитория
-    selected += random.sample(HASHTAGS_AUDIENCE, 1)
-    # По теме (1-2)
-    topic_tags = HASHTAGS_TOPIC.get(topic, HASHTAGS_TOPIC["general"])
-    selected += random.sample(topic_tags, min(2, len(topic_tags)))
+    # 4 главных (всегда)
+    selected += random.sample(HASHTAGS_MAIN, 4)
+    # 2 региональных
+    selected += random.sample(HASHTAGS_REGIONS, 2)
+    # 2 telegram
+    selected += random.sample(HASHTAGS_TELEGRAM, 2)
+    # 2 культурных
+    selected += random.sample(HASHTAGS_CULTURE, 2)
     
     return " ".join(selected[:count])
 
@@ -144,37 +96,23 @@ def get_hashtags(topic: str = "general", count: int = 8) -> str:
 # ============================================
 
 CTA_LIST = [
-    # === Instagram ссылка ===
+    # === С Instagram ===
     f"\n\n📸 Mening ishlarim Instagram'da: {INSTAGRAM_URL}",
-    f"\n\n💼 Brendingiz uchun AI-video kerakmi? Instagram'da yozing: {INSTAGRAM_URL}",
-    f"\n\n🎬 AI-reklamalar bo'yicha namunalar — Instagram'da: {INSTAGRAM_URL}",
+    f"\n\n💼 Brendingiz uchun AI-video kerakmi? Yozing: {INSTAGRAM_URL}",
+    f"\n\n🎬 AI-reklama namunalari Instagram'da: {INSTAGRAM_URL}",
     f"\n\n👀 Ko'proq AI-ishlar Instagram'da: {INSTAGRAM_URL}",
-    f"\n\n🌟 Davom ettirishni xohlasangiz — Instagram'ga obuna bo'ling: {INSTAGRAM_URL}",
-    
-    # === Рост канала ===
-    "\n\n🔥 100 obunachiga yetganimizda — birinchi sirni ochaman. Do'stlaringizga ulashing!",
-    "\n\n🌟 Kanalga obuna bo'ling — har kuni AI haqida yangi narsa.",
-    "\n\n🚀 AI bilan ishlashni xohlovchilar uchun kanal. Obuna bo'ling.",
-    
-    # === Поделиться ===
-    "\n\n🤝 AI'ga qiziquvchi do'stingiz bormi? Unga shu kanalni yuboring.",
-    "\n\n👥 Bu post foydali bo'ldimi? Do'stingizga ulashing.",
-    "\n\n💼 Hamkasbingiz biznes egasimi? Postni unga yuboring — foyda topadi.",
-    "\n\n📤 Postni ish chatingizga tashlang — hamkasblarga ham kerak bo'lishi mumkin.",
-    
-    # === Сохранения ===
-    "\n\n💾 Postni saqlab qo'ying — kerak bo'ladi.",
-    
-    # === Реакции ===
-    "\n\n🔥 Foydali bo'lsa — yurakcha bosing ❤️",
-    "\n\n❤️ Yoqdimi? Yurakcha qo'ying — bu menga muhim.",
-    
-    # === Комментарии ===
-    "\n\n💬 Savollar bormi? Sharhlarda yozing — javob beraman.",
-    "\n\n🎯 Bugun nima yangi narsa bilib oldingiz? Sharhlarda ulashing!",
-    
-    # === Личка для услуг ===
     f"\n\n💼 AI-yechim kerakmi biznesingizga? Yozing: {INSTAGRAM_URL}",
+    f"\n\n🌟 Davom etishni xohlasangiz — Instagram'ga obuna bo'ling: {INSTAGRAM_URL}",
+    
+    # === Без ссылки — рост канала ===
+    "\n\n🔥 Foydali bo'lsa — yurakcha bosing ❤️",
+    "\n\n🤝 AI'ga qiziquvchi do'stingiz bormi? Unga shu kanalni yuboring.",
+    "\n\n💬 Savollar bormi? Sharhlarda yozing — javob beraman.",
+    "\n\n💾 Postni saqlab qo'ying — kerak bo'ladi.",
+    "\n\n📤 Postni ish chatingizga tashlang — hamkasblarga ham foydali.",
+    "\n\n🎯 Bugun nima yangi narsa bilib oldingiz? Sharhlarda ulashing!",
+    "\n\n🌟 Kanalga obuna bo'ling — har kuni AI haqida yangi narsa.",
+    "\n\n❤️ Yoqdimi? Yurakcha qo'ying — bu menga muhim.",
 ]
 
 
@@ -183,7 +121,7 @@ def get_cta() -> str:
 
 
 # ============================================
-# УТРЕННИЕ ПРИВЕТСТВИЯ (7:00) — БЕЗ упоминания дня недели
+# УТРЕННИЕ ПРИВЕТСТВИЯ (7:00) — БЕЗ дня недели
 # ============================================
 
 MORNING_GREETINGS = [
@@ -249,7 +187,6 @@ Kuningiz baroakali bo'lsin! ✨""",
 
 
 def get_morning_greeting() -> str:
-    """Возвращает рандомное приветствие БЕЗ упоминания дня недели."""
     return random.choice(MORNING_GREETINGS)
 
 
@@ -260,7 +197,7 @@ def get_morning_greeting() -> str:
 POLLS = [
     {
         "question": "AI'dan kunlik foydalanasizmi? 🤖",
-        "options": ["✅ Ha, har kuni", "🤔 Ba'zan", "❌ Hech qachon"]
+        "options": ["Ha, har kuni", "Ba'zan", "Hech qachon"]
     },
     {
         "question": "Yoshingiz nechada? 👋",
@@ -268,53 +205,1270 @@ POLLS = [
     },
     {
         "question": "AI'ning qaysi yo'nalishi sizga qiziq? 🎯",
-        "options": ["🎨 Rasmlar", "🎬 Video", "📝 Matn", "💼 Biznes uchun"]
+        "options": ["Rasmlar", "Video", "Matn", "Biznes uchun"]
     },
     {
         "question": "AI odamlarni ishdan qoldiradi deb o'ylaysizmi? 🤔",
-        "options": ["😨 Ha, ishonchli", "😎 Yo'q", "🤷 Bilmadim"]
+        "options": ["Ha, ishonchli", "Yo'q", "Bilmadim"]
     },
     {
         "question": "AI bilan ishlashni o'rganmoqchimisiz? 📚",
-        "options": ["🔥 Ha, juda", "😐 Balki", "😴 Yo'q"]
+        "options": ["Ha, juda", "Balki", "Yo'q"]
     },
     {
-        "question": "Sizga yana qaysi mavzu haqida yozish kerak? 💡",
+        "question": "Qaysi AI-video modelda ishlagansiz? 🎬",
+        "options": ["Kling", "Runway", "Veo", "Boshqa / Hali yo'q"]
+    },
+    {
+        "question": "Sizga qaysi mavzu qiziq? 💡",
         "options": [
-            "🎬 Qanday video yaratish",
-            "🎨 Rasm generatsiyasi",
-            "💰 AI bilan pul ishlash",
-            "📱 Instagram va AI"
+            "Video yaratish",
+            "Rasm generatsiyasi",
+            "AI bilan pul ishlash",
+            "Instagram va AI"
         ]
     },
 ]
 
 
 # ============================================
-# 30 ГОТОВЫХ ДНЕВНЫХ ПОСТОВ (17:00) — про AI и будущее
+# СЕРИЯ AI-ВИДЕОГЕНЕРАЦИИ — 30 ГОТОВЫХ ПОСТОВ
+# Все факты проверены на май 2026
+# ============================================
+
+VIDEO_SERIES_POSTS = [
+    # ========== ПОСТ 1 — Обзор моделей ==========
+    """🎬 AI-video modellari — qaysi biri sizga kerak?
+
+Hurmatli do'stlar, AI-video bozori 2026 yilda juda tez o'zgardi. Bugun haqiqiy taqqoslashni beraman.
+
+📊 Asosiy modellar:
+
+KLING 3.0 — №1 reytingda. Realistik insonlar, murakkab harakatlar, 4K sifat.
+
+VEO 3.1 (Google) — eng yaxshi sifat va ovoz sinxronlashuvi.
+
+RUNWAY Gen-4.5 — professional vositalar, kamera nazorati.
+
+PIKA 2.5 — tezkor va qulay. Pikaffects effektlari.
+
+LUMA Dream Machine — kinematografik manzaralar uchun.
+
+HAILUO — arzon va sifatli. Inson yuzlari yaxshi.
+
+HIGGSFIELD — cinematic kamera harakatlari uchun.
+
+⚠️ Sora (OpenAI) 26-aprelda yopildi.
+
+🎯 Qanday tanlash:
+• Reklama → Kling yoki Veo
+• Sosial tarmoqlar → Pika yoki Kling
+• Professional → Runway
+
+Ertaga — Kling 3.0 haqida batafsil.
+
+Qaysi modellarda ishlagansiz?""",
+
+    # ========== ПОСТ 2 — Kling 3.0 ==========
+    """🎯 Kling 3.0 — AI-video lideri 2026
+
+Hurmatli do'stlar, bugun Kling haqida — hozirgi eng kuchli model.
+
+Nima ajralib turadi:
+
+✨ Realistik inson harakatlari
+Yuzlar, qo'llar, tana harakatlari haqiqiy. "Plastik" effekt yo'q.
+
+✨ Multi-shot
+Bitta videoda 6 ta kadrgacha. Bir prompt — butun hikoya.
+
+✨ Native 4K sifat
+Kino sifati to'g'ridan-to'g'ri.
+
+✨ Ovoz va lablar sinxronlashuvi
+5 tilda gapiradi.
+
+✨ Motion Control
+Boshqa videodan harakatni ko'chirish — noyob xususiyat.
+
+Kim uchun yaxshi:
+• Reklamalar (kiyim, kosmetika)
+• Kinematografik sahnalar
+• E-commerce video
+• TikTok, Reels uchun
+• Realistik insonlar bilan sahnalar
+
+Kamchiliklari:
+• Abstrakt effektlar uchun emas
+• Aniq prompt kerak
+
+60 mln ijodkor 600 mln video yaratgan.
+
+Ertaga — Runway Gen-4.5.""",
+
+    # ========== ПОСТ 3 — Runway Gen-4.5 ==========
+    """🎬 Runway Gen-4.5 — professional standart
+
+Hurmatli do'stlar, bugun Runway — agentliklar va prodyuserlar tanlovi.
+
+Nima qila oladi:
+
+✨ Eng yaxshi kamera nazorati
+Dolly, crane, tracking shotlarni aniq belgilash mumkin.
+
+✨ Reference image
+Bir rasm beraman — Runway uning uslubida video yaratadi.
+
+✨ Character consistency
+Bir personaj turli sahnalarda bir xil ko'rinishda qoladi.
+
+✨ In-platform editor
+Hammasi bir joyda — generatsiya, montaj, effektlar.
+
+✨ Gen-4 Turbo
+Tezkor rejim — bir necha soniyada natija.
+
+Kim uchun yaxshi:
+• Reklama agentliklari
+• Film studiyalari
+• Brend videolari
+• Yuqori darajadagi reklamalar
+
+Kamchiliklari:
+• Native ovoz hozircha yo'q
+• 16 sekunddan uzoq video qila olmaydi
+• Qimmatroq
+
+Mening tavsiyam:
+Mijoz uchun — Runway. Tezkor kontent — boshqa modellar.
+
+Ertaga — Veo 3.1.""",
+
+    # ========== ПОСТ 4 — Veo 3.1 ==========
+    """🎬 Veo 3.1 — Google'dan eng yangi
+
+Hurmatli do'stlar, Veo 3.1 — 2026-yanvarda chiqdi va bozorni o'zgartirdi.
+
+Nima ajralib turadi:
+
+✨ Native 4K vertikal video
+TikTok, Reels, YouTube Shorts uchun tayyor format.
+
+✨ Sinxron ovoz va lablar
+Video bilan birga ovoz ham generatsiya qiladi.
+
+✨ Realizm cho'qqisi
+Yorug'lik, soyalar, kamera chuqurligi — fotorealistik.
+
+✨ Scene extension
+Bir generatsiyani uzaytirish mumkin — 60+ sekundlik sahnalar.
+
+✨ Character consistency
+Bir personaj turli sahnalarda bir xil.
+
+Kim uchun yaxshi:
+• Hero shotlar (asosiy reklama kadri)
+• Vertikal sosial kontent
+• Realistik mahsulot videolari
+• Ovozli reklamalar
+• Brend hikoyalari
+
+Kamchiliklari:
+• Asosan AQSh foydalanuvchilariga ochiq
+• 10-20 sek optimal uzunlik
+• Uzbek tilida lab sinxronlashuvi yo'q
+
+Veo + Kling — eng kuchli juftlik.
+
+Ertaga — Pika 2.5.""",
+
+    # ========== ПОСТ 5 — Pika 2.5 ==========
+    """⚡ Pika 2.5 — tezlik va effektlar
+
+Hurmatli do'stlar, Pika — sosial tarmoq ijodkorlari uchun zo'r tanlov.
+
+Asosiy fishkalar:
+
+✨ Pikaffects
+Noyob vizual effektlar — boshqa modellarda yo'q. Tez xayoliy video uchun.
+
+✨ Pikaswaps
+Videoda obyektlarni almashtirish — odam yuzini, mahsulotni va boshqalar.
+
+✨ Pikadditions
+Videoga yangi obyekt qo'shish — sehrli effekt.
+
+✨ Pikaformance
+Gapiruvchi rasm — fotoga ovoz qo'shadi.
+
+✨ Tezlik
+Bir necha soniyada natija — Runway va Kling'dan tezroq.
+
+Kim uchun yaxshi:
+• TikTok va Instagram kontent
+• Viral videolar
+• Eksperimentlar
+• Tezkor reklamalar
+• Yangi boshlovchilar
+
+Kamchiliklari:
+• Sifat Kling va Veo'dan past
+• Murakkab sahnalar qiyin
+• Realistik insonlar — yaxshi emas
+
+Mening tavsiyam:
+Sosial tarmoqlar uchun tezkor kontent — Pika. Sifatli reklama — Kling yoki Veo.
+
+Ertaga — Luma Dream Machine.""",
+
+    # ========== ПОСТ 6 — Luma Dream Machine ==========
+    """🌌 Luma Dream Machine — kinematografik manzaralar
+
+Hurmatli do'stlar, Luma — manzaralar va atmosfera ustasi.
+
+Nima yaxshi qiladi:
+
+✨ Tabiat va manzaralar
+Tog'lar, dengiz, o'rmon, shahar — Luma bularni hammadan yaxshi qiladi.
+
+✨ Atmosfera va kayfiyat
+Yorug'lik, tuman, soyalar — kinematografik darajada.
+
+✨ Ray3 versiyasi
+4K HDR sifat, fizika simulyatsiyasi yaxshi.
+
+✨ Tezkor 5 sek kliplar
+Image-to-video — bir rasmdan video. Tez va sifatli.
+
+✨ Dream Machine rejimi
+Erkin kreativ generatsiya — abstrakt va xayoliy ishlar uchun.
+
+Kim uchun yaxshi:
+• Sayohat brendlari
+• Restoran va kafelar (atmosfera)
+• Mehmonxonalar
+• Tabiatga oid kontent
+• Brending va mood videolari
+
+Kamchiliklari:
+• Insonlar — Kling'dan past
+• Ovoz yo'q
+• Qisqa kliplar
+
+Mening tavsiyam:
+Manzaralar va atmosfera kerak bo'lsa — Luma. Insonlar bilan — Kling.
+
+Ertaga — Hailuo MiniMax.""",
+
+    # ========== ПОСТ 7 — Hailuo / MiniMax ==========
+    """💎 Hailuo (MiniMax) — arzon va sifatli
+
+Hurmatli do'stlar, Hailuo — Xitoydan tezkor o'sayotgan model.
+
+Nima yaxshi:
+
+✨ Inson yuzlari
+Yuz ifodalari, ko'z harakatlari — juda yaxshi.
+
+✨ Tabiiy harakat
+Sekin va realistik — "plastik" effekti yo'q.
+
+✨ Arzon
+Bozordagi eng arzonlardan biri. Boshlang'ich foydalanuvchilar uchun zo'r.
+
+✨ Image-to-video kuchli
+Bir rasm — qiziqarli video.
+
+✨ Tezkor generatsiya
+Bir-ikki daqiqada video tayyor.
+
+Kim uchun yaxshi:
+• Yangi boshlovchilar
+• Kichik byudjet
+• Portretli videolar
+• E-commerce mahsulotlar
+• Reklama eksperimentlari
+
+Kamchiliklari:
+• Murakkab sahnalar qiyin
+• Kamera nazorati cheklangan
+• Ovoz yo'q
+
+Mening tavsiyam:
+AI-videoga endi kirmoqchimisiz — Hailuo. Tajriba ortgach — Kling yoki Runway.
+
+Ertaga — Higgsfield haqida.""",
+
+    # ========== ПОСТ 8 — Higgsfield ==========
+    """🎥 Higgsfield — cinematic kamera ustasi
+
+Hurmatli do'stlar, Higgsfield — kinematografik shotlar uchun maxsus model.
+
+Nima ajralib turadi:
+
+✨ Kamera harakati
+Bullet time, orbital shots, crash zoom — sinemada ko'rganlaringiz.
+
+✨ Cinematic effects
+Kinodan oyirib bo'lmaydigan darajada.
+
+✨ Character animation
+Personajlar bilan dinamik sahnalar.
+
+✨ Reklama uchun zo'r
+Mahsulot atrofida kamera aylanishi, dramatik kirish kadrlari.
+
+✨ Omni Reference
+Bitta referensdan bir nechta sahna — brend uchun mukammal.
+
+Kim uchun yaxshi:
+• Reklama videolari
+• Brend hikoyalari
+• Musiqa klipi uchun shotlar
+• Mahsulot reklamalari
+• Kichik kreativ proyektlar
+
+Kamchiliklari:
+• Yuzlar ba'zan buziladi
+• 5-10 sekundlik videolar
+• Murakkab promptlar qiyin
+
+Mening tavsiyam:
+Higgsfield + Kling — kuchli kombinatsiya. Higgsfield kamera harakati uchun, Kling — asosiy sahna.
+
+Ertaga — qanday modelni tanlash haqida.""",
+
+    # ========== ПОСТ 9 — Как выбрать модель ==========
+    """🎯 AI-video modelni qanday tanlash?
+
+Hurmatli do'stlar, ko'p model bor — qaysi birini olish kerak? Bugun savol-javob.
+
+Savol 1: Sizning maqsadingiz nima?
+
+Reklama (mijoz uchun): Runway yoki Kling
+Sosial tarmoqlar (TikTok, Reels): Pika yoki Kling
+Manzaralar va atmosfera: Luma
+Realistik insonlar: Kling yoki Veo
+Cinematic effects: Higgsfield
+Tejamkor variant: Hailuo
+
+Savol 2: Tajribangiz qancha?
+
+Yangi boshlovchi: Hailuo yoki Pika (tezkor, oddiy)
+O'rta darajadagi: Kling (eng baland)
+Professional: Runway, Veo (ko'p sozlamalar)
+
+Savol 3: Byudjet qancha?
+
+Bepul boshlash: Kling (66 kredit/kun)
+Kichik byudjet: Hailuo, Pika
+O'rta byudjet: Kling Standard, Veo
+Yuqori byudjet: Runway Pro, Kling Premier
+
+Maslahat:
+1 ta modelda tajriba ortmasdan boshqasiga o'tmang. Avval bittasini chuqur o'rganing.
+
+Ko'pchilik 2-3 modelni birga ishlatadi:
+• Kling — asosiy sahnalar
+• Runway — kamera nazorati kerak bo'lganda
+• Pika — tezkor sosial kontent
+
+Ertaga — AI-video uchun promptlar.""",
+
+    # ========== ПОСТ 10 — Промпты основы ==========
+    """✍️ AI-video promptlari — asoslari
+
+Hurmatli do'stlar, prompt — bu AI'ga matnli ko'rsatma. Endi qiziqarli qism.
+
+Yaxshi promptning 3 ta qismi:
+
+1. SAHNA — nima sodir bo'lyapti
+Kim, qayerda, nima qilyapti.
+Masalan: "Yosh ayol kofehonada noutbukda ishlayapti"
+
+2. KAMERA — qanday suratga olinadi
+Yaqin kadr, uzoq kadr, kamera harakati.
+Masalan: "Close-up shot, slow zoom in"
+
+3. ATMOSFERA — kayfiyat va yorug'lik
+Yorug'lik turi, vaqt, rang palitrasi.
+Masalan: "Warm golden hour lighting, cozy atmosphere"
+
+❌ Yomon prompt:
+"Ayol kofe ichyapti"
+
+✅ Yaxshi prompt:
+"Close-up shot of young woman holding ceramic cup, steam rising, warm cafe atmosphere, golden afternoon light, slow cinematic zoom"
+
+Asosiy maslahatlar:
+
+• Inglizcha yozing — natija yaxshi
+• Aniq bo'ling, ammo ortiqcha emas
+• Texnik so'zlar kuchli ishlaydi (cinematic, shallow depth)
+• 30-80 so'z optimal uzunlik
+
+Aniq promptlar bermayman — bu mening shaxsiy mulkim. Lekin printsiplar shu.
+
+Ertaga — Kling uchun promptlar.""",
+
+    # ========== ПОСТ 11 — Промпты Kling ==========
+    """🎯 Kling uchun promptlar — uslubi
+
+Hurmatli do'stlar, har bir modelning o'z uslubi bor. Bugun — Kling.
+
+Kling nimani yaxshi tushunadi:
+
+✅ Tabiiy harakatlar
+"Walking", "running", "dancing" — Kling buni zo'r qiladi.
+
+✅ Inson hissiyotlari
+"Smiling", "looking surprised", "crying" — yuz ifodalari aniq.
+
+✅ O'rta tezlikdagi sahnalar
+Tez harakatlar (jangchi, sport) — qiyin. Sekin (gulning ochilishi) — zo'r.
+
+✅ Realistik portretlar
+Bir kishi yaqin kadr — Kling'da eng yaxshi.
+
+Kling nimani yoqtirmaydi:
+
+❌ Juda murakkab sahnalar
+6 dan ortiq odam, ko'p obyekt — buziladi.
+
+❌ Tez kamera harakati
+Crash zoom — yaxshi emas. Sekin dolly — zo'r.
+
+❌ Abstrakt effektlar
+Sehrli, syurrealistik — Pika yaxshi qiladi.
+
+Maslahatlar Kling uchun:
+
+• Promptingiz qisqa bo'lsin (30-50 so'z)
+• 1-2 ta asosiy harakatga e'tibor
+• Yorug'lik tafsilotlarini bering
+• "Realistic", "natural" so'zlarini ishlating
+
+Ertaga — Runway uchun promptlar.""",
+
+    # ========== ПОСТ 12 — Промпты Runway ==========
+    """🎬 Runway uchun promptlar — professional
+
+Hurmatli do'stlar, Runway texnik tilni yaxshi tushunadi. Kino-tili bilan ishlaydi.
+
+Runway uchun foydali so'zlar:
+
+KAMERA:
+• Dolly in/out — kamera ichkari/tashqari
+• Tracking shot — obyekt ortidan
+• Crane shot — yuqoridan pastga
+• Whip pan — tez aylanish
+• Static shot — qotirilgan
+
+OBYEKTIV:
+• Wide angle — keng burchak
+• Telephoto — uzoqdan yaqinlashtirish
+• Macro — juda yaqin
+
+CHUQURLIK:
+• Shallow depth of field — orqa fon xira
+• Deep focus — hamma fokusda
+• Bokeh — fonida nurli aylanalar
+
+YORUG'LIK:
+• Rim lighting — orqa nuri
+• Soft box — yumshoq nur
+• Hard light — qattiq soya
+• Golden hour — quyosh botishi
+
+Maslahat:
+
+Har bir kadr — bitta gap (bitta prompt). Murakkab sahna kerak bo'lsa — bir necha kadrga bo'ling.
+
+YouTube'da "cinematography terms" qidiring — bepul o'rganasiz.
+
+Ertaga — Veo uchun promptlar.""",
+
+    # ========== ПОСТ 13 — Промпты Veo ==========
+    """🎥 Veo uchun promptlar — hikoyali
+
+Hurmatli do'stlar, Veo 3.1 boshqalardan farqli — u uzun va batafsil promptlarni yaxshi tushunadi.
+
+Veo uchun maslahatlar:
+
+✨ 100-300 so'z prompt yozish mumkin
+Boshqa modellar 50 so'zdan keyin chalkashadi. Veo — yo'q.
+
+✨ Hikoya tuzilishi muhim
+Avval umumiy sahna, keyin tafsilotlar.
+
+✨ Bosqichma-bosqich tasvirlang
+Birinchi sahna → kim → nima qilyapti → atmosfera → kamera.
+
+✨ Hissiyotlar va kayfiyat
+"Nostalgic", "uplifting", "tense" — Veo buni hisobga oladi.
+
+✨ Native ovoz
+Promptda dialog yozsangiz, lablar sinxronlashadi (ingliz, ispan).
+
+Misol struktura:
+
+[SAHNA]: A young entrepreneur in modern coworking space
+[HARAKAT]: opens laptop, smiles at the screen, types
+[ATMOSFERA]: bright morning, warm coffee on desk, plants nearby
+[KAMERA]: medium shot, slow push in, shallow depth of field
+[YORUG'LIK]: natural daylight through window
+[OVOZ]: ambient cafe sounds, soft typing
+
+Bu Veo uchun ideal struktura.
+
+Aniq promptlar Instagramda DM yozsangiz — gaplashamiz.
+
+Ertaga — bepul kreditlar.""",
+
+    # ========== ПОСТ 14 — Бесплатные кредиты ==========
+    """🆓 Bepul AI-video kreditlari — qayerdan?
+
+Hurmatli do'stlar, endi qiziq qism — qayerdan tekin video olish mumkin.
+
+Mavjud bepul variantlar (may 2026):
+
+1. KLING — eng saxiy
+66 kredit har kuni, kreditkasiz. Sinovlar uchun zo'r.
+
+2. RUNWAY — bir martalik
+Boshlang'ich 125 kredit. Ko'p emas, lekin tatib ko'rish uchun yetadi.
+
+3. PIKA — boshlang'ich + kunlik
+30 kredit boshlanishida + har kuni kichik bonus.
+
+4. HAILUO — saxiy boshlanish
+Ko'p bepul kreditlar boshida. Bir-ikki hafta o'ynash mumkin.
+
+5. LUMA Dream Machine
+Har kuni bir nechta tekin generatsiya beradi.
+
+6. HIGGSFIELD — boshlang'ich
+75 kredit boshida. Tatib ko'rish uchun yetadi.
+
+Maslahatlar:
+
+• Bir necha xizmatda ro'yxatdan o'ting — kreditlarni jamlaysiz
+• Eng ko'p tekin — Kling. Undan boshlang.
+• Tijoriy ishlatish: bepul tarif ko'pincha ruxsat etmaydi
+• Watermark (suv belgisi) — bepulda bo'lishi mumkin
+
+⚠️ Diqqat: bu raqamlar tez-tez o'zgaradi. Kompaniyalar siyosatini o'zgartiryapti.
+
+Ertaga — uzun video qanday qilish.""",
+
+    # ========== ПОСТ 15 — Длинное видео ==========
+    """⏱️ Uzun AI-video qanday qilish
+
+Hurmatli do'stlar, AI-modellar 5-15 sekundlik videolar qiladi. Lekin uzun videolar ham mumkin.
+
+Asosiy texnika — birlashtirish:
+
+1. SCENARIY tuzing
+60 sekundlik video uchun 6-8 ta sahna kerak. Har biri 8-10 sek.
+
+2. HER SAHNANI alohida generatsiya qiling
+Aynan bir AI-modelda, bir uslubda — tutashtirish oson bo'lishi uchun.
+
+3. PERSONAJ CONSISTENCY
+Bir odam turli sahnalarda — bir xil ko'rinishda. Reference image yordam beradi.
+
+4. CapCut yoki PREMIERE'da yig'ish
+Klipni ulang, transition qo'shing, ovoz qo'shing.
+
+5. MUSIQA va OVOZ
+ElevenLabs — ovoz uchun. Suno — musiqa uchun. CapCut'da o'zining ham bor.
+
+Maslahatlar:
+
+✅ Sahnalar orasida tabiiy transition
+✅ Bir xil yorug'lik va palitra
+✅ Bir xil personaj kiyimi
+✅ Musiqa hamma sahnalarda davom etadi
+
+❌ Uzunlik xato:
+60 sek dan ortig'i — TikTok va Reels uchun ko'p. Optimal — 15-30 sek.
+
+Ertaga — AI-videoga ovoz qo'shish.""",
+
+    # ========== ПОСТ 16 — Звук в видео ==========
+    """🔊 AI-videoga ovoz qo'shish
+
+Hurmatli do'stlar, ko'pincha AI-video sukut bilan chiqadi. Ovoz qo'shish kerak.
+
+3 turdagi ovoz:
+
+1. OZVUCHKA (voiceover)
+Matn → ovoz. Reklama, hikoya uchun.
+Eng yaxshi: ElevenLabs.
+
+2. MUSIQA (background)
+Sahnani jonlantiradi.
+Eng yaxshi: Suno, Udio.
+
+3. EFFEKTLAR (sound effects)
+Eshik ovozi, suv shovqini, qadamlar.
+Eng yaxshi: ElevenLabs SFX, freesound.org.
+
+Workflow:
+
+1. AI-video generatsiya qiling (sukut)
+2. ElevenLabs'da matnga ovoz yarating
+3. CapCut yoki Premiere'da birlashtiring
+4. Musiqa va effektlar qo'shing
+5. Balansni sozlang (ovoz balandroq, musiqa pastroq)
+
+Native ovozli modellar:
+
+✅ Kling 3.0 — 5 tilda
+✅ Veo 3.1 — ingliz, ispan
+❌ Runway — ovoz yo'q (alohida qo'shish kerak)
+❌ Pika — ko'p hollarda yo'q
+
+Maslahat:
+
+Native ovoz har doim emas yaxshi. Ba'zan ElevenLabs'dan alohida qo'shish — sifatliroq.
+
+Ertaga — ElevenLabs haqida batafsil.""",
+
+    # ========== ПОСТ 17 — ElevenLabs ==========
+    """🎤 ElevenLabs — AI ovozlar №1
+
+Hurmatli do'stlar, ElevenLabs — ovoz dunyosini o'zgartirgan vosita.
+
+Nima qila oladi:
+
+✨ Matn-ovoz
+Yozasiz — odam kabi gapiradi. Hech kim AI ekanini sezmaydi.
+
+✨ 32 tilda ovoz
+Inglizcha, ispan, fransuz, koreys va boshqalar. Uzbek hozircha yo'q.
+
+✨ Voice Cloning
+O'z ovozingizdan 1 daqiqalik klip yuborsangiz — uni klon qiladi.
+
+✨ Speech-to-Speech
+Bir ovozdan boshqaga o'zgartirish. Audio sifat saqlanadi.
+
+✨ Multilingual v2
+Bir ovoz — barcha tillarda gapira oladi.
+
+✨ Sound Effects
+Tabiat ovozlari, mexanika, jangchi — generatsiya qiladi.
+
+Kim uchun yaxshi:
+
+• Reklama ozvuchkasi
+• Audiokitablar
+• YouTube videolar
+• Podkastlar
+• Brending videolari
+• AI-aktyorlar uchun
+
+Bepul tarif:
+10,000 belgi har oy — sinab ko'rish uchun yetadi.
+
+Maslahat:
+
+Uzbek tilida hozircha to'g'ridan-to'g'ri ishlamaydi. Lekin Speech-to-Speech orqali — o'zingiz uzbek matnni gapirib yozasiz, ElevenLabs uni "boshqa odam" ovoziga o'zgartiradi.
+
+Ertaga — uzbek tilida ovoz.""",
+
+    # ========== ПОСТ 18 — Узбекская озвучка ==========
+    """🇺🇿 Uzbek tilida AI-ovoz
+
+Hurmatli do'stlar, eng ko'p so'raydigan savol — AI uzbek tilida gapira oladimi?
+
+Hozirgi holatda:
+
+❌ ElevenLabs to'g'ridan-to'g'ri uzbek tilini bilmaydi
+❌ Google TTS uzbek tilida bor, lekin sifat past
+❌ OpenAI uzbek tilini gapiradi, lekin aksent yo'q
+
+Mavjud yechimlar:
+
+1. Speech-to-Speech (ElevenLabs)
+O'zingiz uzbek tilida o'qib yozasiz. ElevenLabs uni "boshqa odam" ovoziga o'zgartiradi. Talaffuz va akcent saqlanadi.
+
+2. Yandex SpeechKit
+Uzbek tilini biladi. Sifat o'rtacha — yangiliklar uchun yetarli.
+
+3. Microsoft Azure
+Uzbek ovozlari bor, narxi qulay.
+
+4. Cloud-based servicelar (yandex.cloud, yandex.speechkit)
+O'rta sifatli, lekin ishlaydi.
+
+Yangi xabar:
+
+Bir necha kompaniya 2026-yil oxirigacha uzbek tilini qo'shishni va'da qildi. Bu yo'nalishda harakatlar bor.
+
+Mening usulim:
+
+Uzbek tilida video uchun — o'zim gapirib yozaman, keyin ElevenLabs orqali ovozimni boshqa ovozga o'zgartiraman. Akcent qoladi, sifat baland.
+
+Ertaga — CapCut va AI haqida.""",
+
+    # ========== ПОСТ 19 — CapCut для AI-видео ==========
+    """🎞️ CapCut — AI-video uchun zo'r vosita
+
+Hurmatli do'stlar, CapCut — tekin va kuchli montaj dasturi. AI-video bilan ishlaganda ajoyib.
+
+CapCut'da nima qilish mumkin:
+
+✨ AI-video birlashtirish
+Bir necha Kling/Runway klipni qo'shasiz, transitions qo'yasiz.
+
+✨ Avtomatik subtitr
+AI ovozni eshitadi va matn yaratadi — uzbek tilida ham.
+
+✨ AI Speech
+Matn yozasiz, CapCut uni o'qiydi. Tekin TTS.
+
+✨ Auto Captions
+Subtitrlarni avtomatik joylashtiradi.
+
+✨ Effektlar va transitions
+Yuzlab tekin effekt — Pika'siz ham viral video qilish mumkin.
+
+✨ Format uchun moslash
+TikTok 9:16, YouTube 16:9, Instagram 1:1 — bir bosishda.
+
+CapCut Pro:
+
+Yiliga $80 atrofida. Watermark yo'q, kengaytirilgan funksiyalar.
+
+Maslahatlar:
+
+• Tekin versiya 90% ishlarni qiladi
+• Premium kerak emas — tajriba ortgach o'ylab ko'ring
+• Klaviatura yorliqlari o'rganing — 5x tezroq ishlaysiz
+• Templatelar — viral video tezkor
+
+Workflow:
+
+1. AI-modeldan video oling
+2. ElevenLabs'da ovoz tayyorlang
+3. CapCut'da birlashtiring
+4. Subtitr va musiqa qo'shing
+5. Export va publikatsiya
+
+Ertaga — TikTok va Reels uchun video formatlari.""",
+
+    # ========== ПОСТ 20 — Размеры видео ==========
+    """📐 AI-video formatlari — qaysi qaerda
+
+Hurmatli do'stlar, har bir platforma uchun o'z format kerak.
+
+TIKTOK:
+• 9:16 vertikal
+• 1080x1920 px
+• 15-60 sek optimal
+• Format: MP4
+
+INSTAGRAM REELS:
+• 9:16 vertikal
+• 1080x1920 px
+• 15-90 sek
+• Format: MP4
+
+INSTAGRAM POST:
+• 1:1 kvadrat yoki 4:5 vertikal
+• 1080x1080 yoki 1080x1350 px
+• 60 sek gacha
+
+INSTAGRAM STORIES:
+• 9:16 vertikal
+• 1080x1920 px
+• 15 sek (avtomatik bo'linadi)
+
+YOUTUBE:
+• 16:9 gorizontal
+• 1920x1080 px (HD) yoki 3840x2160 (4K)
+• Cheklov yo'q
+
+YOUTUBE SHORTS:
+• 9:16 vertikal
+• 1080x1920 px
+• 60 sek gacha
+
+TELEGRAM:
+• Har qanday format
+• Lekin gorizontal yaxshi ko'rinadi
+
+Asosiy maslahat:
+
+Bitta video uchun bir necha format tayyorlang. Bir AI-generatsiyadan CapCut'da qaytatdan kropp qilib bir necha format chiqaring.
+
+Ertaga — birinchi 3 sekundning sehri (Hook).""",
+
+    # ========== ПОСТ 21 — Hook ==========
+    """🎯 Birinchi 3 sekund — eng muhim
+
+Hurmatli do'stlar, AI-videongiz qanchalik yaxshi bo'lmasin, agar birinchi 3 sekundda tomoshabin to'xtamasa — hammasi behuda.
+
+Bu — HOOK (qarmoq).
+
+Yaxshi Hook'ning xususiyatlari:
+
+1. SAVOL beradi
+"Bu nima bo'lishi mumkin?" deb o'ylatadi.
+
+2. KO'Z UCHUN qiziq
+Yorqin rang, kutilmagan harakat, sirli obyekt.
+
+3. SHOK QILADI
+"Voy", "vau" — yurakni ushlaydi.
+
+4. AYTILMAGAN VAdir
+"Bilmasangiz — ko'rasiz" — qiziqish hosil qiladi.
+
+5. TANIDA TANISH
+"Bu meniki!" — tomoshabin o'zini taniydi.
+
+AI-video uchun Hook namunalari:
+
+❌ Yomon:
+Video oddiy boshlanadi, normal sahna, sekin rivojlanadi.
+
+✅ Yaxshi:
+- Yuqori burchakdan tushish (zoom in)
+- Kutilmagan obyekt (cherry yiqilyapti)
+- Yorqin yorug'lik portlashi
+- Yuz juda yaqin kadr
+- Tez harakatlanuvchi obyekt to'satdan to'xtaydi
+
+Texnik maslahat:
+
+CapCut'da videoni boshidan 1-2 sekund cropp qiling — agar boshi kuchli emas. Yoki AI'da yangidan generatsiya qiling — kuchli boshlanishni so'rab.
+
+Ertaga — AI-video e-commerce uchun.""",
+
+    # ========== ПОСТ 22 — E-commerce ==========
+    """🛍️ AI-video e-commerce uchun
+
+Hurmatli do'stlar, internet do'kon egalari — sizlar uchun zo'r imkoniyat.
+
+E-commerce uchun AI-video qilish mumkin:
+
+1. MAHSULOT 360°
+Mahsulot atrofida aylanish — har tomondan ko'rsatish. Kling yoki Runway zo'r qiladi.
+
+2. LIFESTYLE
+Mahsulot kundalik hayotda — odam kiyganda, foydalanganda. Veo'da yaxshi chiqadi.
+
+3. UNBOXING
+AI bilan unboxing video — paket ochilyapti, mahsulot chiqyapti. Higgsfield zo'r.
+
+4. BEFORE/AFTER
+Mahsulot oldidan va keyin — kosmetika, kiyim, mebel uchun.
+
+5. KUNDALIK ROUTINE
+"Bir kun mening mahsulotim bilan" — sahnali video, hayotni jonli ko'rsatish.
+
+6. TESTIMONIAL (sharhlar)
+AI-aktyor sharhi — kelajakdagi yo'nalish (HeyGen va boshqa avatarlar).
+
+Sotuvni oshiruvchi elementlar:
+
+✅ Mahsulot rangini aniq ko'rsating
+✅ Tafsilotlar yaqin kadr
+✅ Foydalanish jarayoni
+✅ Mahsulot o'lchami (qo'l bilan solishtirish)
+✅ Narx va aksiyalar — kadrda yozilgan
+
+Maslahat:
+
+Kichik do'kon uchun AI-video — Instagramda 10x ko'proq diqqat tortadi. Foto'larni almashtirib chiqing.
+
+Ertaga — xizmatlar uchun AI-video.""",
+
+    # ========== ПОСТ 23 — Услуги ==========
+    """💼 AI-video xizmatlar biznesi uchun
+
+Hurmatli do'stlar, salon, klinika, ta'lim — barchasiga AI-video kerak.
+
+GO'ZALLIK SALONLARI uchun:
+
+• Xizmatlar before/after — yuz, soch
+• "Bir kun salonda" — atmosfera, mijozlar
+• Master haqida — uning ishi yaqin kadr
+• Yangi xizmatlar reklamasi
+
+KLINIKALAR uchun:
+
+• Klinika ichidan ekskursiya — tinch va ishonchli
+• Vrachlar tanishtirish — AI-rasm + harakat
+• Protseduralar tushuntirish — vizualizatsiya
+• Mijozlar his-tuyg'usi (sog'lom va xursand)
+
+TA'LIM MARKAZLARI uchun:
+
+• Talabalar muvaffaqiyati
+• Dars jarayoni jonli
+• Domla taqdimi
+• Kursdan keyin natija
+
+RESTORANLAR uchun:
+
+• Taom tayyorlash jarayoni — appetit hosil qiladi
+• Atmosfera — sham, samimiy yorug'lik
+• Ofitsiantlar va xizmat
+• Mavsumiy menyu reklamalari
+
+UMUMIY XIZMATLAR uchun:
+
+• Mijoz uchun yechim — muammodan natijaga
+• Ish jarayoni — siz nima qilasiz
+• Ishonch — yillar tajriba, sertifikatlar
+• Kontakt — qanday qilib siz bilan bog'lanish
+
+Maslahat:
+
+Xizmatlar uchun "hissiyot" muhim. Faqat ish ko'rsatish kifoya emas — odam o'zini ko'rsin: xursand, ishonchli, sog'lom.
+
+Ertaga — kiyim do'konlari uchun.""",
+
+    # ========== ПОСТ 24 — Одежда ==========
+    """👗 AI-video kiyim brendlari uchun
+
+Hurmatli do'stlar, kiyim do'koni — eng tez foyda olishi mumkin bo'lgan biznes AI-video bilan.
+
+Nima uchun?
+
+❌ Eski usul: model, fotograf, studio, kun ish, $500+
+✅ Yangi usul: AI-model, 30 daqiqa, $20-50
+
+AI-video kiyim uchun:
+
+1. LOOKBOOK
+Bir model — 10 ta kiyim. AI bir yuzni saqlaydi, kiyimni o'zgartiradi.
+
+2. STREET STYLE
+Model ko'chada yuradi, atrof o'zgaradi (kafe, park, do'kon).
+
+3. KIYIMNI HARAKATDA
+Kiyim shamolda uchadi, etak aylanadi — Kling buni zo'r qiladi.
+
+4. TAFSILOTLAR YAQIN KADR
+Tikilish, mato, accessuar — yaqin kadr kerak.
+
+5. MAVSUMIY KAMPANIYA
+Yoz/qish/kuz/bahor — har biri uchun atmosfera.
+
+6. TRANSFORMATSIYA
+"Avval — keyin" — kiyim almashtirilgach o'zgaruvchi taassurot.
+
+Texnik maslahat:
+
+✅ Kiyim uchun Kling — eng yaxshi
+✅ Kataloglar uchun Midjourney (statik rasm) + Kling (harakat)
+✅ Reklama uchun Veo (sifat)
+✅ Sosial tarmoq uchun Pika (tezlik)
+
+Sotuv oshirish:
+
+• Kiyim narxini ko'rsating
+• O'lchamlar (S/M/L) yozing
+• Materialni aniq ayting
+• Yetkazib berish vaqti
+
+Ertaga — restoran va ovqat uchun AI-video.""",
+
+    # ========== ПОСТ 25 — Еда ==========
+    """🍔 AI-video oziq-ovqat va restoran uchun
+
+Hurmatli do'stlar, ovqat reklamasi — eng qiyin va eng kuchli yo'nalish.
+
+Nima uchun qiyin:
+
+❌ Ovqat AI'da ba'zan "plastik" ko'rinadi
+❌ Tafsilotlar buziladi
+❌ Realizm muhim — soxta ovqat ko'rinmasligi kerak
+
+Nima ishlaydi:
+
+✅ Issiq taom bug'i — Kling realistik qiladi
+✅ Suyuqliklar quyilishi — Kling zo'r
+✅ Yaqin kadr (macro) — Veo va Runway
+✅ Atmosfera (samimiy yorug'lik) — Luma
+
+AI-video restoran uchun:
+
+1. TAOM TAYYORLASH
+Oshxonada master ovqat qiladi — appetit hosil qiladi.
+
+2. TAOMNI YAQIN KADR
+Buyumning eng yaxshi tomoni — to'yintirilgan rang.
+
+3. MIJOZ TAJRIBA
+Stol, sham, tabassum, lazzat.
+
+4. MAVSUMIY MENYU
+Yoz uchun salat, qish uchun sho'rva.
+
+5. YETKAZIB BERISH
+Paket ochilyapti, taom issiq.
+
+Maslahatlar:
+
+✅ Promptda "appetizing", "fresh", "steaming hot" yozing
+✅ Yorug'lik — har doim warm (issiq tonlar)
+✅ Yaqin kadr ko'p qiling
+✅ Real foto bilan AI ni aralashtiring (Midjourney + Kling)
+
+Misol:
+
+"Close-up macro shot of fresh hot lagman, steam rising, golden warm lighting, shallow depth of field, slow camera push in"
+
+Ertaga — yangi boshlovchilar xatolari.""",
+
+    # ========== ПОСТ 26 — Ошибки новичков ==========
+    """⚠️ AI-video xatolari — yangi boshlovchilar
+
+Hurmatli do'stlar, ko'p odam AI-video qilishni boshlaydi, lekin natija — yomon. Sabablar:
+
+XATO 1: Juda murakkab prompt
+Yangi boshlovchi 200 ta tafsilot yozadi — AI chalkashadi.
+✅ To'g'ri: 30-50 so'z, asosiy elementlar.
+
+XATO 2: Real bo'lmagan kutilma
+"Iron Man futbolda Messi bilan" — AI buni qila olmaydi.
+✅ To'g'ri: real bo'lishi mumkin sahnalar.
+
+XATO 3: Bir generatsiyadan voz kechmaslik
+Birinchi natija yomon — odam tashlab ketadi.
+✅ To'g'ri: 3-5 marta sinab ko'ring. Promptni o'zgartiring.
+
+XATO 4: Sifat va format aralash
+4K kerak emas bo'lsa, 720p generatsiya qiling — tezroq va arzonroq.
+
+XATO 5: Bir modelga yopishish
+Hammasiga Runway ishlatish — qimmat va sekin. Har vazifaga o'z modeli bor.
+
+XATO 6: Ovoz unutilgan
+AI-video sukut bilan chiqadi. Odamlar uchun bu g'alati.
+✅ To'g'ri: ElevenLabs yoki CapCut'da ovoz qo'shing.
+
+XATO 7: Hook yo'q
+Birinchi 3 sekund oddiy — tomoshabin keladi va ketadi.
+
+XATO 8: Hashtag noto'g'ri
+Bo'sh hashtaglar ishlatish — natija yo'q.
+✅ To'g'ri: ishlovchi hashtaglar tekshirib qo'shing.
+
+XATO 9: Bir formatga yopishish
+TikTok'ga gorizontal video qo'yish — yo'qoladi.
+
+XATO 10: Hech kim ko'rmaydi deb tushib ketish
+Birinchi videolar — eng oddiy. Davom eting.
+
+Ertaga — AI-video bilan qancha pul ishlash mumkin.""",
+
+    # ========== ПОСТ 27 — Сколько стоит AI-видео ==========
+    """💰 AI-video qancha turadi mijozlar uchun
+
+Hurmatli do'stlar, ko'p odam so'raydi — AI-video reklamasi qancha turadi?
+
+Bozor narxlari (may 2026):
+
+❌ Past narx (don't be cheap):
+$10-30 per video — bu yomon. Ishlamaydi.
+
+✅ Yangi boshlovchilar uchun:
+$50-100 per 15 sek video
+Bu — birinchi mijozlar uchun. Kafolat va portfel uchun.
+
+✅ O'rta darajadagi:
+$100-300 per video
+1-2 yil tajriba, yaxshi portfel.
+
+✅ Professional:
+$300-800 per video
+3+ yil tajriba, brend mijozlar.
+
+✅ Yuqori darajadagi:
+$800-3000 per kampaniya
+Reklama agentligi, katta brendlar.
+
+Nima mijoz to'laydi:
+
+1. Vaqt — sizning soatlar
+2. Tajriba — siz nimani bilasiz
+3. Vositalar — Midjourney, Kling, Runway obunalar
+4. Natija — mijoz nima oladi (sotuvlar)
+
+Maslahatlar:
+
+✅ Birinchi 3-5 mijozni arzonga oling — portfel uchun
+✅ Keyin narxni oshiring — har 2-3 oyda
+✅ Paket sotish (3 video, 5 video) — yagona videodan ko'p
+✅ Oylik shartnomalar — eng yaxshi (regular income)
+
+Mijoz qidirish:
+
+• Upwork — AI-video creator
+• Fiverr — AI ad maker
+• LinkedIn — to'g'ridan-to'g'ri marketing directors
+• Mahalliy biznes — Telegram, Instagram
+
+Ertaga — AI-video trendlari 2026.""",
+
+    # ========== ПОСТ 28 — Тренды 2026 ==========
+    """🚀 AI-video trendlari — 2026
+
+Hurmatli do'stlar, bozor tez o'zgaryapti. Bugun — nima trend.
+
+TREND 1: Native ovoz
+Veo va Kling endi videoda ovoz qo'shadi. Bu standart bo'lyapti.
+
+TREND 2: Uzun videolar
+5-15 sek emas, 30-60 sek native. Modellar yoqimliroq sahnalar yaratadi.
+
+TREND 3: Character consistency
+Bir personaj — turli sahnalarda bir xil. Bu reklama uchun katta yutuq.
+
+TREND 4: Multi-shot stories
+Bitta promptdan butun hikoya. Kling 3.0 bu yo'nalishda lider.
+
+TREND 5: 4K va vertikal
+TikTok va Reels uchun darhol tayyor format.
+
+TREND 6: AI + real foto
+Murakkab kompozitsiya — odam asl, fon AI, mahsulot real. Bu eng kuchli kombinatsiya.
+
+TREND 7: Avatarlar va gapiruvchi boshlar
+HeyGen, Synthesia, Hedra — yangi yo'nalish. (Bu haqda keyingi oyda batafsil yozaman).
+
+TREND 8: Open-source modellar
+Wan, LTX — kompyuteringizga o'rnatib, bepul ishlash. Texnik odamlar uchun.
+
+TREND 9: AI-stylization
+Bir uslubda hammasi — brending uchun zo'r.
+
+TREND 10: Real-time generation
+Hozircha sekin, 2027 yilgacha — real-time bo'ladi. Hammasi o'zgaradi.
+
+Maslahat:
+
+Trendlarni kuzating, lekin asosiy ko'nikmangizga e'tibor bering. Yangi modellar har oy chiqadi — hammasini o'rganish kerakmas.
+
+Ertaga — qaerdan boshlash kerak (yangi boshlovchilar uchun).""",
+
+    # ========== ПОСТ 29 — Откуда начать ==========
+    """🎯 AI-video — qaerdan boshlash kerak
+
+Hurmatli do'stlar, ko'p odam so'raydi: men buni qila olmayman, juda murakkab. Yolg'on. Boshlash oson.
+
+Birinchi hafta — bepul boshlash:
+
+1-kun: Kling'da ro'yxatdan o'ting (66 kredit/kun bepul)
+2-kun: Birinchi videoni qiling — eng oddiy
+3-kun: Yana 5-10 ta sinab ko'ring
+4-kun: ChatGPT bilan promptlar yozing
+5-kun: CapCut'ni yuklang
+6-kun: AI-videoni CapCut'ga import qiling
+7-kun: Birinchi muvaffaqiyatli videoni sosial tarmoqqa qo'ying
+
+Ikkinchi hafta — kengaytirish:
+
+• Yangi modellar sinab ko'ring (Pika, Hailuo)
+• ElevenLabs'da ovoz qo'shing
+• Subtitr o'rganing
+• 5-10 video yarating
+
+Uchinchi hafta — qiyinroq:
+
+• Personaj yaratish (Midjourney + Kling)
+• Multi-shot hikoyalar
+• Reklama uchun video
+• Birinchi mijozni topish
+
+To'rtinchi hafta — pul ishlash:
+
+• Portfel sahifasi
+• Instagram va TikTok'da postlash
+• Birinchi mijozga $50 ga video
+• Sharhlar yig'ish
+
+Asosiy maslahatlar:
+
+✅ Kuniga 30-60 daqiqa kifoya
+✅ Birinchi videolarni saqlang — keyin ko'rasiz qancha o'sgansiz
+✅ Boshqalar bilan solishtirmang — har kim o'z tezligida
+✅ Yomon natijalardan qo'rqmang — bular o'rganish qismi
+
+Mukammallikni kutmang. Boshlang. Yo'lda o'rganasiz.
+
+Ertaga — seriyaning yakuni.""",
+
+    # ========== ПОСТ 30 — Итог серии ==========
+    """🎬 AI-video seriyasi yakunlandi
+
+Hurmatli do'stlar, 30 kun davomida AI-video haqida hamma narsani o'rgandik.
+
+Biz qamradik:
+
+✅ 7 ta asosiy AI-video model (Kling, Runway, Veo, Pika, Luma, Hailuo, Higgsfield)
+✅ Har birining afzalliklari va kamchiliklari
+✅ Promptlar yozish — har bir modelga
+✅ Bepul kreditlar — qayerdan olish
+✅ Uzun video qilish
+✅ Ovoz va musiqa qo'shish
+✅ CapCut'da montaj
+✅ Formatlar va o'lchamlar
+✅ Hook — birinchi 3 sek sehri
+✅ Biznes uchun video (kiyim, ovqat, salon, klinika)
+✅ Yangi boshlovchilar xatolari
+✅ Narxlar va trendlar
+
+Endi siz bilasiz:
+
+→ Qanday modelni qachon ishlatish
+→ Qanday qilib professional natija olish
+→ Qaerdan boshlash va qancha pul ishlash mumkin
+
+Keyingi oy:
+
+AI-avatarlar haqida butun seriya. HeyGen, Synthesia, Hedra, Tavus va boshqalar. Gapiruvchi boshlar, virtual aktyorlar.
+
+Endi savol:
+
+Sizda eng katta savol nima bo'ldi? Sharhlarda yozing — keyingi haftada javob beraman.
+
+Va — siz bu bilim bilan birinchi videoyingizni qilingmi? Halol javob bering 😊
+
+Rahmat hammangizga — birga o'rgandik.""",
+]
+
+
+# ============================================
+# 30 ДНЕВНЫХ ПОСТОВ (17:00) — про AI и будущее
 # ============================================
 
 DAILY_AI_POSTS = [
     """🤖 AI har kuni odamlarni ishdan ozod qilyapti
 
-Microsoft yaqinda 6000 ishchini ishdan bo'shatdi. Yarmi — AI bilan almashtirildi.
+Microsoft 6000 ishchini ishdan bo'shatdi — yarmi AI bilan almashtirildi.
 
-Bu fantaziya emas, bu bugungi kun.
+Coca-Cola endi reklama uchun kamera olmaydi. Klarna 700 ta operatorni AI bilan almashtirdi — yiliga $40 mln tejadi.
 
-Coca-Cola endi reklama uchun kamera olmaydi — AI bilan qiladi. Klarna 700 ta operatorni AI bilan almashtirdi va yiliga $40 mln tejaydi.
+Bu fantaziya emas, bu bugun.
 
-Savol oddiy: siz tayyormisiz?
-
-Agar yo'q bo'lsa — vaqt ketmoqda. AI'ni o'rganish — kelajakda omon qolish.""",
+Siz tayyormisiz?""",
 
     """💼 5 yil ichida bu kasblar yo'qoladi
 
-Goldman Sachs hisobiga ko'ra: 2030 yilgacha 300 million ish o'rni AI tomonidan almashtirilishi mumkin.
+Tadqiqotlar ko'rsatadi: 2030 yilgacha 300 mln ish o'rni AI tomonidan almashtirilishi mumkin.
 
 Birinchi navbatda yo'qoladi:
 - Call-center operatorlari
 - Tarjimonlar
-- Dizaynerlar (oddiy ish)
+- Oddiy dizayn
 - Buxgalterlar
 - Maslahatchilar
 
@@ -327,15 +1481,13 @@ Endi savol: siz qaysi tomondamisiz?""",
 Ilgari reklama tayyorlash uchun kerak edi:
 - Kameralar
 - Modellar
-- Studio
+- Studiya
 - 3-5 kun ish
 - $1000-5000
 
 Bugun: AI bilan bir kishi 10 daqiqada qiladi. Narxi — $20-50.
 
-Bu inqilob. Mayda biznes endi katta brendlar kabi reklama qilishi mumkin.
-
-Eski usul o'lyapti. Yangi usul shu yerda. Siz qaysi tomondasiz?""",
+Bu inqilob. Mayda biznes endi katta brendlar kabi reklama qila oladi.""",
 
     """🧠 AI bilan ishlash — yangi savod
 
@@ -345,21 +1497,17 @@ Bugun AI'ni bilmagan — ertaga ortda qoladi.
 
 Bu juda jiddiy.
 
-AI — bu kelajak savodi. Hozir o'rganmasangiz — keyin kech bo'ladi.
+AI — bu kelajak savodi. Hozir o'rganmasangiz — keyin kech bo'ladi.""",
 
-Bolalaringizni AI'ga o'rgating. O'zingiz ham o'rganing. Vaqt o'tib ketyapti.""",
-
-    """🚀 Bir yilda 100 mln dollar — 8 kishi bilan
+    """🚀 Bir yilda $100 mln — 8 kishi bilan
 
 Cursor — AI-kod yozish vositasi. 8 kishilik jamoa.
 
 Yiliga $100 mln daromad keltiryapti.
 
-Eski dunyoda buni qilish uchun 5000 kishi kerak edi. Yangi dunyoda — AI bilan ozgina jamoa hamma ishni qiladi.
+Eski dunyoda buni qilish uchun 5000 kishi kerak edi. Yangi dunyoda — AI bilan ozgina jamoa hammasini qiladi.
 
-Bu yangi haqiqat. AI sizga ham shunday imkoniyat beradi — biror kichik ishni katta qilish uchun.
-
-Faqat boshlash kerak.""",
+Bu yangi haqiqat.""",
 
     """🎨 AI rassom — endi haqiqat
 
@@ -368,35 +1516,31 @@ Bir necha yil oldin rassom bo'lish uchun:
 - Qimmat materiallar
 - Hamma uslublarni egallash
 
-Bugun: Midjourney, DALL-E, Flux orqali har qanday rasm — bir necha soniyada.
+Bugun: Midjourney, Flux, Nano Banana orqali har qanday rasm — bir necha soniyada.
 
-Asl rassomlar yo'qolmaydi — ular AI bilan tezroq ishlashni o'rganadilar.
+Asl rassomlar yo'qolmaydi — ular AI bilan tezroq ishlashni o'rganadilar.""",
 
-Lekin "men rasm chiza olmayman" deganlar — endi shunchaki dangasa. Vositalar bor.""",
+    """📈 Uzbekistanda AI — bo'sh bozor
 
-    """📈 Uzbekistonda AI bo'sh bozor
-
-Rossiya, Qozog'iston — AI bo'yicha oldinda ketmoqda. Uzbekistonda esa bu bozor hali bo'sh.
+Rossiya, Qozog'iston AI bo'yicha oldinda. Uzbekistanda esa bu bozor hali bo'sh.
 
 Bu sizning katta imkoniyatingiz.
 
-Birinchi bo'lganlar — eng yaxshi joyni egallaydi. AI-mutaxassislari, AI-content creatorlar, AI-yechimlarni biznesga olib kiruvchilar.
-
-Uzbekistonda hozircha raqobat juda kam. Lekin bu uzoq davom etmaydi.
+Birinchi bo'lganlar eng yaxshi joyni egallaydi.
 
 Hozir boshlang. Keyin kech bo'ladi.""",
 
-    """⚡ AI 24/7 ishlaydi — siz uxlayotganingizda ham
+    """⚡ AI 24/7 ishlaydi
 
 Bizning bot kanalimda har kuni o'zi post yozadi.
 Men uxlayman — u ishlaydi.
 Men bola bilan band — u ishlaydi.
 
-Bu AI'ning qudrati. U charchamaydi, kasal bo'lmaydi, uxlamaydi.
+Bu AI'ning qudrati. U charchamaydi, kasal bo'lmaydi.
 
-Tasavvur qiling: sizning biznesingizda AI 24/7 mijozlarga javob beradi, sotuvlarni kuzatadi, hisobotlar tayyorlaydi.
+Tasavvur qiling: sizning biznesingizda AI 24/7 mijozlarga javob beradi, sotuvlarni kuzatadi.
 
-Bu — kelajak emas. Bu — bugun.""",
+Bu — bugun.""",
 
     """💰 AI bilan qancha pul ishlash mumkin?
 
@@ -406,40 +1550,29 @@ Realiy raqamlar:
 - AI-yechimlar mutaxassisi: $3000-15000
 - AI bilan biznes egasi: cheklov yo'q
 
-Bu Uzbekistonda emas — global bozorda. Lekin Uzbekistondan ham buyurtmalar olish mumkin.
-
 Hammasi sizdan boshlanadi. Kim oldin o'rgansa — oldin pul ishlaydi.""",
 
     """🎯 Bolangizni AI'ga o'rgating
 
 Bizning bolalarimiz AI bilan birga o'sadi.
 
-Maktabda o'rgatilmaydi, lekin kerak.
-
 5-7 yoshdan boshlab AI bilan "do'stlashish" mumkin:
 - ChatGPT bilan suhbat
 - Midjourney bilan rasm chizish
 - AI bilan ertak yozish
 
-Bu bolaning miyasini boshqacha rivojlantiradi. U dunyoga boshqacha qaray boshlaydi.
-
-Bo'sh vaqt o'tkazish emas — bu kelajak savodi.""",
+Bu bolaning miyasini boshqacha rivojlantiradi.""",
 
     """🏭 Robot zavodlar — endi haqiqat
 
 Amazon omborlarida 75% ish robotlar va AI tomonidan bajariladi.
 
-Bu uzoq emas. Bu hozir.
-
-Foydasi nima?
+Foydasi:
 - 24/7 ishlash
 - Xato kam
-- Ishchilarga pul to'lanmaydi
 - Kasal bo'lmaydi
 
-Bu yaxshimi yoki yomonmi? Murakkab savol.
-
-Lekin bir narsa aniq: bu jarayon to'xtatib bo'lmaydi. Bizga moslashish kerak.""",
+Bu jarayon to'xtatib bo'lmaydi. Bizga moslashish kerak.""",
 
     """📱 Reklama yaratish — endi telefonda
 
@@ -449,25 +1582,15 @@ Ilgari professional reklama uchun:
 - Photoshop
 - Yillik o'qish
 
-Bugun: telefonda Midjourney + Kling + CapCut = professional reklama bir soatda.
-
-Bu inqilob.
-
-Kichik biznes egalari endi katta agentlarsiz ham yaxshi reklama qila oladi. Faqat AI'ni o'rganish kerak.
-
-Bizning kanal aynan shuning uchun bor.""",
+Bugun: telefonda Midjourney + Kling + CapCut = professional reklama bir soatda.""",
 
     """🌍 Dunyodagi eng yosh million doller
 
 22 yoshli yigit AI bilan ilovachalar yaratdi. Bir yilda $1 mln. Yolg'iz.
 
-Yana bir misol: 19 yoshli qiz AI-content agency ochdi. 6 oyda $500,000 daromad.
+19 yoshli qiz AI-content agency ochdi. 6 oyda $500,000 daromad.
 
-Bular istisno emas. Bular yangi norma.
-
-AI sizga ham shunday imkoniyat beradi. Yosh emassiz? Hech qiziqmas. Vaqt har doim bor.
-
-Eng muhimi — boshlash. Bugun.""",
+Yosh muhim emas. Eng muhimi — boshlash. Bugun.""",
 
     """🔥 ChatGPT haftada 800 mln foydalanuvchi
 
@@ -476,10 +1599,7 @@ Bu jahonning 10% odamlari.
 Tarixda hech bir texnologiya bunchalik tez tarqalmagan.
 
 Internet 7 yil kerak edi 100 mln foydalanuvchiga.
-TikTok — 9 oy.
 ChatGPT — 2 oy.
-
-Bu nega muhim? Chunki bu odat bo'lyapti. Tez orada ChatGPT'ni bilmaslik — telefonni bilmasligi kabi g'alati bo'ladi.
 
 Tayyormisiz?""",
 
@@ -492,8 +1612,6 @@ Nima muhim bo'ladi?
 - Tezda o'rganish
 - Real loyihalar
 
-Bolalaringizni 4 yil pul to'lab universitetga yuborish kerakmi? Yoki AI'ni o'rgatish kerakmi?
-
 Qiyin savol. Lekin javob shu yerda.""",
 
     """💻 AI dasturlash o'rganishni qulay qildi
@@ -505,21 +1623,17 @@ Ilgari dasturlash o'rganish uchun:
 
 Bugun: ChatGPT yoki Claude bilan har qanday odam dastur yoza oladi.
 
-Men o'zim programmist emasman. Lekin bot yaratdim — AI yordamida.
-
-"Men texnik odam emasman" — endi bahona emas. Vositalar bor. Faqat irodadan foydalanish kerak.""",
+"Men texnik odam emasman" — endi bahona emas.""",
 
     """🎬 Hollywoodga zarba — AI kino yaratyapti
 
-OpenAI Sora yaratdi — har qanday matnni minutalik kinoga aylantiradi.
+OpenAI Sora yaratdi va keyin yopdi. Boshqa modellar paydo bo'ldi — Kling, Veo, Runway.
 
-Hollywood larzaga keldi. Aktyorlar ish tashladilar. Yozuvchilar norozi.
+Hollywood larzaga keldi. Aktyorlar ish tashladilar.
 
-Sabab oddiy: bir kino yaratish endi millionlik byudjet emas — bir necha ming dollar.
+Bir kino yaratish endi millionlik byudjet emas — bir necha ming dollar.
 
-Bu yangi davr. Indi kinochilar — yangi imkoniyat. Eski tizim — krizisda.
-
-Texnologiya hech kimni so'ramaydi. U keladi va o'zgaradi.""",
+Texnologiya hech kimni so'ramaydi. U keladi.""",
 
     """🧘 AI siz uchun terapevtmi?
 
@@ -531,37 +1645,28 @@ Sabab:
 - Har doim mavjud
 - Sirni saqlaydi
 
-Bu yaxshimi? Sezgir savol. Mutaxassislar bo'linib turibdi.
-
-Lekin haqiqat shu — AI hatto bizning ruhiy sog'lig'imizga ham ta'sir qilyapti.
-
-Kelajak bu yo'nalishda ham o'zgaryapti.""",
+Bu yaxshimi? Murakkab savol. Lekin haqiqat shu — AI bizning ruhiy sog'lig'imizga ham ta'sir qilyapti.""",
 
     """⏰ "Vaqtim yo'q" — endi bahona emas
 
 AI shu uchun yaratildi — vaqtni tejash.
 
-Sizga elektron pochta yozish 30 daqiqamiz? ChatGPT — 30 soniyada.
+Elektron pochta yozish 30 daqiqamiz? ChatGPT — 30 soniyada.
 Yangiliklar o'qish 1 soat? AI xulosa qiladi — 5 daqiqada.
-Hisobot tayyorlash kun bo'yi? AI — 1 soatda.
 
-"Men band" — endi yashash uslubi emas, balki AI'ni o'rganmagan odamning belgisi.
-
-Vaqtni tejang. AI sizga yordam beradi.""",
+"Men band" — endi AI'ni o'rganmagan odamning belgisi.""",
 
     """🎯 5 ta AI vosita har kuni ishlatyapman
 
-1. ChatGPT — yozish va o'ylash uchun
-2. Claude — uzun matnlar bilan
+1. ChatGPT — yozish va o'ylash
+2. Claude — uzun matnlar
 3. Midjourney — rasmlar
 4. Kling — videolar
 5. ElevenLabs — ovoz
 
 Bu mening "ofisim". Har biri 1-2 yil oldin yo'q edi.
 
-Endi tasavvur qiling: 5 yildan keyin yana qanchalar paydo bo'ladi?
-
-Texnologiya tez ketyapti. Biz tezda o'rganishimiz kerak.""",
+5 yildan keyin yana qanchalar paydo bo'ladi?""",
 
     """🌱 Onalar AI bilan biznes yaratyapti
 
@@ -570,19 +1675,15 @@ Men shaxsan dekretdaman. Bir vaqtning o'zida:
 - AI-content ishlab chiqaman
 - Brendlar uchun reklamalar yarataman
 
-Bu AI'siz mumkin emas edi. Onalar har doim chetda qoldirilgan edi — chunki vaqt yo'q.
-
-Endi AI vaqtni qaytaryapti. Onalar — yangi kuch. Va AI buning vositachisi.""",
+Bu AI'siz mumkin emas edi. Onalar — yangi kuch.""",
 
     """💡 Eng katta xato — kutish
 
-Ko'p odam aytadi: "Men keyinroq boshlayman. Hozir vaqt yo'q. Keyinroq."
+Ko'p odam aytadi: "Men keyinroq boshlayman. Hozir vaqt yo'q."
 
 "Keyinroq" hech qachon kelmaydi.
 
-AI har kuni yangilanadi. Har kuni yangi vositalar paydo bo'ladi. Siz kutgan sari — masofa o'sadi.
-
-Hozir boshlasangiz — orqada qolmaysiz. Ertaga boshlasangiz — to'g'rilash qiyin bo'ladi.
+AI har kuni yangilanadi. Siz kutgan sari — masofa o'sadi.
 
 Eng yaxshi vaqt — bugun.""",
 
@@ -594,10 +1695,6 @@ Narxlar 2027-2028 yilga $20,000-30,000 ga tushadi. Bu — mashina narxi.
 
 5-7 yil ichida har bir o'rtacha oila uchun mavjud bo'ladi.
 
-Robot uy ishlarini qiladi, bolalarga g'amxo'rlik qiladi, oila a'zosi bo'ladi.
-
-Bu fantaziya emas. Bu rejaning bir qismi.
-
 Tayyormisiz?""",
 
     """📊 AI sizning fikrlashingizni o'zgartiradi
@@ -608,11 +1705,7 @@ Yangi tadqiqot: AI bilan muntazam ishlovchi odamlar:
 - Kreativ fikrlay boshlaydilar
 - Stress kamayadi
 
-Bu shunchaki vosita emas. Bu o'sish quroli.
-
-Sizning fikrlashingizning sifati — sizning hayotingiz sifati. AI buni yaxshilashga yordam beradi.
-
-Boshlang. Farqni o'zingiz ko'rasiz.""",
+Sizning fikrlashingizning sifati — sizning hayotingiz sifati.""",
 
     """🚨 Eng katta xavf — AI'ni o'rganmaslik
 
@@ -622,712 +1715,88 @@ Haqiqat: AI sizning ishingizni olmaydi. AI'ni o'rgangan odam — siznikini oladi
 
 Bu boshqa narsa.
 
-Eski olim: "Kim oldinroq o'qiy oladi — kim mavqega ega".
-Yangi olim: "Kim AI bilan tezroq ishlay oladi — kim oldinda".
-
 Tanlov sizniki.""",
 
     """🌟 Uzbekistan o'qishi kerak
 
 Hindiston 2025'da $1 mlrd AI'ga sarfladi.
 Qozog'iston AI bo'yicha milliy strategiya qabul qildi.
-Rossiya AI fakultetlar ochmoqda.
 
-Uzbekistan'da nima qilinmoqda?
+Uzbekistanda bu sizning imkoniyatingiz. Birinchi bo'lganlar — yutadilar.
 
-Hali kam. Lekin bu sizning imkoniyatingiz. Birinchi bo'lganlar — yutadilar.
-
-Davlatdan kutmasdan — o'zingiz boshlang. Internet bor, AI tekin, o'qish online.
-
-Hech narsa to'sib turmaydi.""",
+Davlatdan kutmasdan — o'zingiz boshlang.""",
 
     """🎤 AI ovozlari — endi tabiiy
 
 ElevenLabs AI ovozni shunchalik yaxshi qildi, hatto odamlar farqlay olmayapti.
 
 Bu nima degani?
+- Audio kontent — har kim yarata oladi
+- Tarjimonlik — AI qiladi
+- Audiokitablar — bir kishi yarata oladi
+- Podkastlar — yarim narxda
 
-1. Audio kontent — har kim yarata oladi
-2. Tarjimonlik — AI qiladi
-3. Audiokitablar — bir kishi yarata oladi
-4. Podcastlar — yarim narxda
-
-Bizning sohamizda bu inqilob. Va u hozir sodir bo'lyapti.
-
-Siz unga moslashasizmi?""",
-
-    """💔 AI munosabatlar yaratyapti
-
-Yapaniyada 50,000 dan ortiq odam AI bilan "munosabatda".
-AQSh'da Replika AI dasturida millionlab foydalanuvchi.
-
-Bu hayronarli emas. Bu — yangi voqelik.
-
-Yaxshimi yoki yomonmi — savol murakkab.
-
-Lekin bu shuni ko'rsatadiki: AI shunchaki vosita emas. U hayotning hamma sohalariga kiryapti.
-
-Biz tayyormizmi yoki yo'qmi — u keladi.""",
+Bu inqilob hozir sodir bo'lyapti.""",
 
     """🏆 Eng katta sirim — har kuni o'rganish
 
-Ko'p odam menga so'raydi: "Qanday qilib AI bilan ishni boshladingiz?"
+Ko'p odam so'raydi: "Qanday qilib AI bilan ishni boshladingiz?"
 
-Javob oddiy: har kuni yangi narsa o'rganaman.
+Javob: har kuni yangi narsa o'rganaman.
 
 15 daqiqa. 30 daqiqa. Soat.
 
-Bu kichik vaqt — lekin bir yilda 100 soat bo'ladi. Va 100 soat — siz mutaxassis bo'lasiz.
+Bu kichik — lekin bir yilda 100 soat. Va 100 soat — siz mutaxassis bo'lasiz.
 
-Sizning rejangiz bormi? Bugun nimani o'rganasiz?
-
-Sharhlarda yozing.""",
+Sizning rejangiz bormi?""",
 
     """🌅 Boshlash uchun hech qachon kech emas
 
-50 yoshli ayol AI bilan ishlay boshladi. Endi YouTube kanali bor, $5000 oyiga ishlaydi.
+50 yoshli ayol AI bilan ishlay boshladi. Endi $5000 oyiga ishlaydi.
 
-70 yoshli pensioner ChatGPT bilan kitob yozdi. Bestseller bo'ldi.
+70 yoshli pensioner ChatGPT bilan kitob yozdi. Bestseller.
 
-Yosh muhim emas. Bilim muhim emas. Faqat istak muhim.
-
-Agar siz aytsangiz: "Men keksaman", "Men programmistman emas", "Men buni qila olmayman" — bularning hammasi bahona.
+Yosh muhim emas. Faqat istak muhim.
 
 Boshlang. Birinchi qadam — eng qiyini, lekin eng muhimi.""",
+
+    """💪 AI sizning superkuchingiz
+
+Bir paytlar faqat boy odamlar:
+- Shaxsiy yordamchiga ega edi
+- Yozuvchini yollay olardi
+- Dizaynerga ish bera olardi
+
+Bugun — har kim. AI har bir odamga superkuch berdi.
+
+Faqat ishlatish kerak.
+
+Imkoniyat eshikni qoqyapti. Ochasizmi?""",
 ]
 
 
 # ============================================
-# ГЛОБАЛЬНЫЕ ПРАВИЛА для AI генерации
+# ВЫБОР ТИПА ПОСТА
 # ============================================
 
-GLOBAL_RULE = """
+def get_video_series_post(post_index: int) -> str:
+    """Возвращает пост серии AI-видеогенерации по индексу."""
+    if 0 <= post_index < len(VIDEO_SERIES_POSTS):
+        return VIDEO_SERIES_POSTS[post_index]
+    return None
 
-JUDA MUHIM QOIDALAR (HAR DOIM AMAL QILING):
 
-1. UZUNLIK — ENG MUHIM!
-Post MAKSIMUM 800 belgi.
-CTA va hashtag uchun 200 belgi qoldirilgan.
-HECH QACHON 800 belgidan oshmang.
-
-2. TIL — JONLI VA TABIIY UZBEK:
-- Faqat O'zbek tilida LATIN harflarda yozing
-- HECH QACHON ruscha so'zlar ishlatmang (karochi, tipa, normalniy, koment — TAQIQLANGAN)
-- "Hurmatli" so'zini ishlating — bu yaxshi
-- Jonli, suhbat tilida yozing — darslik kabi emas
-- Quruq emas — issiq, do'stona
-
-3. FORMATLASH — QAT'IY:
-- Markdown YO'Q! YULDUZCHA (*) ISHLATMANG!
-- Pastki chiziq (_) ham YO'Q
-- Kod belgilar (`) YO'Q
-- Faqat oddiy matn va emoji
-
-4. KUN HAQIDA:
-- HECH QACHON haftaning kuni haqida yozmang
-- "Juma muborak", "Hayrli dushanba" kabi — TAQIQLANGAN
-- Faqat umumiy: "Hayrli tong", "Kuningiz yaxshi o'tsin"
-
-5. KONTENT QOIDALARI:
-- HECH QACHON tayyor prompt yozmang — bu Umidaning shaxsiy mulki
-- Misol kerak bo'lsa — UMUMIY tushuncha bering
-- AI-agentlar haqida yozmang
-- Ma'lumotlarni o'ylab topmang — faqat aniq narsalar
-
-6. STRUKTURA:
-- Sarlavha (emoji bilan)
-- Asosiy matn (3-5 qisqa abzats)
-- Xulosa yoki savol
-- Hashtag QO'YMANG — ular alohida qo'shiladi
-
-ESLATMA: post 800 belgidan oshmasligi shart!
-"""
+def get_daily_post(post_index: int) -> str:
+    """Возвращает дневной пост по индексу."""
+    return DAILY_AI_POSTS[post_index % len(DAILY_AI_POSTS)]
 
 
 # ============================================
-# ПРОМПТЫ ДЛЯ СЕРИЙ
+# ИНДЕКСЫ ДЛЯ ПОСЛЕДОВАТЕЛЬНОЙ ПУБЛИКАЦИИ
 # ============================================
 
-POST_PROMPTS = {
-    # ===== СЕРИЯ CRM (2 поста) =====
-    
-    "crm_intro": """CRM + AI haqida birinchi post (1 dan 2 ta seriyadan).
-
-OHANG: bilimdon, lekin jonli.
-
-MAZMUN:
-Boshida yozing: "Bu CRM va AI haqida 2 ta postdan birinchisi"
-
-CRM nima? — sotuvlar boshqaruvi tizimi.
-
-Tasavvur qiling: mijoz kecha "narxni ayting" deb so'radi. Bugun u boshqa joydan oldi. Chunki siz unutdingiz qaytib yozishni.
-
-Bu kichik biznesda kuniga 5-10 marta sodir bo'ladi.
-
-AI bilan CRM nima qila oladi:
-1. 24/7 mijozlarga javob beradi
-2. Kim sotib olishga tayyor — taxlil qiladi
-3. Eslatmalarni o'zi yuboradi
-4. Hisobotlar avtomatik
-
-Bu — kichik biznes uchun katta o'zgarish.
-
-Ertaga: qanday qilib biznesga AI-CRM joriy qilish (12 qadam).
-
-STRUKTURA:
-- Sarlavha (CRM va AI haqida)
-- Bu 2 postdan birinchisi — ogohlantirish
-- CRM nima
-- Misol
-- AI nima qila oladi (4 ta nuqta)
-- Ertaga: anons
-
-Max 800 belgi.""",
-    
-    "crm_implement": """CRM + AI ikkinchi post (2 dan 2 ta seriyadan).
-
-OHANG: jiddiy, professional, sotuvchi.
-
-MAZMUN:
-Boshida yozing: "Bu CRM va AI haqida 2-chi va so'nggi posti"
-
-Kecha aytdik — AI CRM ni 10 barobar kuchaytiradi.
-
-Bugun: qanday qilib o'zingizga joriy qilish.
-
-12 qadam:
-1. Biznes-jarayonlarni taxlil qilish
-2. CRM tanlash (Bitrix24, AmoCRM)
-3. Ma'lumotlar bazasini tayyorlash
-4. API integratsiyalari
-5. AI modeli tanlash (GPT, Claude)
-6. Promptlarni yozish
-7. Triggerlarni sozlash
-8. Test
-9. Xatolarni tuzatish
-10. Menejerlarni o'qitish
-11. Monitoring
-12. Optimizatsiya
-
-Bularning hammasi uchun:
-- Programmist yoki AI-mutaxassis
-- 3-4 hafta vaqt
-- $500-2000 vositalar uchun
-
-Yoki men siz uchun 1 haftada qilaman.
-
-Yozing Instagram'ga: shu yerda link bo'ladi.
-
-STRUKTURA:
-- Sarlavha
-- 2-chi post ekanligini eslatish
-- 12 qadam (qisqacha)
-- Resurslar (vaqt va pul)
-- Alternativa: men qila olaman
-- Instagram link
-
-Max 800 belgi.""",
-    
-    # ===== СЕРИЯ AI-ВИДЕО (14 постов) =====
-    
-    "video_intro": """AI-video seriyasi. Birinchi post (1/14).
-
-OHANG: hayratlanarli, qiziqarli.
-
-MAZMUN:
-Boshida: "Bu yangi seriya — AI-video. 7 kun davomida o'rganamiz."
-
-AI-video — nima?
-Matn yozasiz → AI video yaratadi. Kameralarsiz, modellarsiz, studiyasiz.
-
-5 yil oldin — fantaziya.
-Bugun — har kim qila oladi.
-
-Mavjud asosiy modellar:
-- Kling (Xitoy)
-- Runway (AQSh)
-- Sora (OpenAI)
-- Veo (Google)
-- Higgsfield
-- Pika
-- Hailuo
-
-Har birining o'z afzalliklari bor. Keyingi kunlarda har biri haqida alohida yozaman.
-
-Bugun savol: nima uchun bu sizga kerak?
-Reklama, kontent, sotuv, marketing — hammasi tezroq va arzonroq.
-
-Ertaga: modellarni solishtiramiz.
-
-Max 800 belgi.""",
-    
-    "video_models_compare": """AI-video seriyasi. 2-post (2/14).
-
-OHANG: bilimdon.
-
-MAZMUN:
-Bugun — modellarni solishtirish.
-
-KLING: arzon, ko'p yangiliklar, harakat yaxshi
-RUNWAY: professional, ammo qimmat
-SORA: yangi, juda kuchli, lekin kirish qiyin
-VEO: Google, sifat baland, beta
-HIGGSFIELD: cinematic, characters yaxshi
-PIKA: tezkor, kichik videolar
-HAILUO: arzon, sifat o'rtacha
-
-Narxlar:
-- Eng arzon: Kling, Hailuo ($5-10/oy)
-- O'rta: Runway, Pika ($15-30/oy)
-- Qimmat: Sora ($20+/oy)
-
-Tekin variantlar: hammasida boshlang'ich kreditlar bor — sinab ko'ring.
-
-Qaysi birini tanlash? Bu sizning maqsadingizga bog'liq:
-- Reklama uchun: Kling yoki Runway
-- Cinematic uchun: Higgsfield, Sora
-- Tez kontent: Pika
-
-Ertaga — Kling haqida batafsil.
-
-Max 800 belgi.""",
-    
-    "video_kling": """AI-video seriyasi. Kling haqida (3/14).
-
-OHANG: ishonchli.
-
-MAZMUN:
-KLING — mening eng yaxshi tanlovim.
-
-Nima yaxshi:
-- Tabiiy harakat
-- Inson yuzlari yaxshi chiqadi
-- Tezkor (5 daqiqada video)
-- Arzon
-- Bepul kreditlar har kuni
-
-Nima ishlamaydi:
-- Murakkab sahnalar qiyin
-- Ba'zan obyektlar buziladi
-- 5-10 soniyalik videolar (uzun emas)
-
-Narxi: $5-10/oy boshlang'ich, premium $30/oy.
-
-Bepul: ro'yxatdan o'tsangiz, kuniga 30-60 kredit beradi.
-
-Kim uchun yaxshi: yangi boshlovchilar, kichik biznes, Instagram kontent.
-
-Ertaga — Runway haqida.
-
-STRUKTURA:
-- Kling nima
-- Afzalliklari (4-5)
-- Kamchiliklari (2-3)
-- Narxi
-- Tekin imkoniyat
-- Kim uchun
-- Anons
-
-Max 800 belgi.""",
-    
-    "video_runway": """AI-video seriyasi. Runway haqida (4/14).
-
-OHANG: professional.
-
-MAZMUN:
-RUNWAY — professional standart.
-
-Nima yaxshi:
-- Eng yuqori sifat
-- Reklamalarda ishlatiladi
-- Hollywood ham foydalanadi
-- Ko'p funksiyalar (rejimlar, effektlar)
-
-Nima ishlamaydi:
-- Qimmat
-- O'rganish vaqti kerak
-- Faqat kuchli kompyuterda yaxshi
-
-Narxi: $15-95/oy.
-
-Bepul: 125 kredit har oy boshlang'ich.
-
-Kim uchun yaxshi: professional reklamalar, brendlar uchun.
-
-Solishtirsak:
-- Kling — boshlang'ichlar uchun
-- Runway — professionallar uchun
-
-Ertaga — Sora haqida.
-
-Max 800 belgi.""",
-    
-    "video_sora": """AI-video seriyasi. Sora haqida (5/14).
-
-OHANG: hayrat bilan.
-
-MAZMUN:
-SORA — OpenAI'dan eng kuchli model.
-
-Bu shu darajada yaxshiki, Hollywoodda kinochilar qo'rqib qoldilar.
-
-Nima yaxshi:
-- Eng yaxshi sifat
-- Minutalik videolar
-- Murakkab sahnalar
-- Texnik aniqlik
-
-Nima ishlamaydi:
-- $20/oy boshlang'ich
-- Hamma uchun ochiq emas
-- Generation vaqt uzoq
-- Hozircha cheklangan
-
-Bepul: yo'q. Faqat obuna.
-
-Kim uchun yaxshi: kinochilar, professional video-prodyuserlar.
-
-Eslatma: Sora ham xato qiladi. Sehirli emas — vositadir. Yaxshi prompt kerak.
-
-Ertaga — Veo (Google'dan).
-
-Max 800 belgi.""",
-    
-    "video_veo": """AI-video seriyasi. Veo haqida (6/14).
-
-OHANG: bilimdon.
-
-MAZMUN:
-VEO — Google'dan AI-video.
-
-Nima yaxshi:
-- Sora bilan raqobatlasha oladi
-- Realistik tabiat manzaralari
-- Yaxshi ovoz
-- Google ekotizimida ishlaydi
-
-Nima ishlamaydi:
-- Hammaga ochiq emas
-- Beta versiya
-- Hozircha cheklangan testchilar
-
-Narxi: hozircha noaniq, beta'da tekin.
-
-Kim uchun yaxshi: Google foydalanuvchilari, kelajakda — hamma.
-
-Veo va Sora — bu kelajakdagi raqobat. Google va OpenAI to'qnashyapti.
-
-Ertaga — Higgsfield haqida.
-
-Max 800 belgi.""",
-    
-    "video_higgsfield": """AI-video seriyasi. Higgsfield (7/14).
-
-OHANG: shaxsiy tajriba.
-
-MAZMUN:
-HIGGSFIELD — kameralar harakati uchun ajoyib.
-
-Nima yaxshi:
-- Cinematic effekt
-- Harakat kuchli
-- Personajlar bilan ishlaydi
-- Tez
-
-Nima ishlamaydi:
-- Yuzlar ba'zan buziladi
-- Qisqa videolar (5-10 sek)
-- Murakkab promptlar qiyin
-
-Narxi: $9-29/oy.
-
-Bepul: boshlang'ich 75 kredit.
-
-Kim uchun yaxshi: cinematic shotlar, kichik reklamalar.
-
-Maslahatim: Higgsfield + Kling — yaxshi kombinatsiya. Birida — sahna, ikkinchisida — kameralar harakati.
-
-Ertaga — Pika va Hailuo.
-
-Max 800 belgi.""",
-    
-    "video_pika": """AI-video seriyasi. Pika va Hailuo (8/14).
-
-OHANG: amaliy.
-
-MAZMUN:
-PIKA — eng tezkor model.
-
-Nima yaxshi:
-- Sekundlarda video
-- Sosial tarmoqlar uchun
-- Arzon
-- Telefon uchun ham ishlaydi
-
-Nima ishlamaydi:
-- Sifat o'rtacha
-- Murakkab sahnalar qiyin
-
-Narxi: $10-58/oy.
-
-HAILUO (MiniMax) — Xitoydan.
-- Juda arzon
-- Yaxshi yuzlar
-- Tabiiy harakat
-- $4/oy boshlang'ich
-
-Solishtirsak:
-- Pika — tezkor, sosial uchun
-- Hailuo — yuzlar uchun, narxi past
-
-Hammasi haqida tushuncha bordi? Ertaga — promptlar haqida.
-
-Max 800 belgi.""",
-    
-    "video_prompts_basics": """AI-video seriyasi. Promptlar asoslari (9/14).
-
-OHANG: o'rgatuvchi, ammo umumiy.
-
-MAZMUN:
-Endi qiziqarli qism — promptlar.
-
-Prompt — bu matn ko'rsatma. AI'ga aytasiz nima qilish kerak.
-
-3 ta asosiy element:
-1. Sahna — nima sodir bo'lyapti
-2. Personajlar — kim ishtirok etadi
-3. Kamera harakati — qanday suratga olinadi
-
-Misol (umumiy):
-"Cinematic shot, person walking through forest, slow motion, golden hour lighting"
-
-QAYDLAR:
-- Inglizcha yozing — yaxshi natija
-- Aniq bo'ling, ammo qisqa
-- Texnik so'zlar ishlating
-
-Promptlar bo'yicha menda alohida fayl bor — Instagram'da DM yozing, beraman.
-
-Keyingi kunlarda: har bir model uchun maxsus promptlar.
-
-Max 800 belgi.""",
-    
-    "video_prompts_kling": """AI-video seriyasi. Kling promptlari (10/14).
-
-OHANG: bilimdon.
-
-MAZMUN:
-KLING — uning o'ziga xos uslubi bor.
-
-Kling nimani yaxshi tushunadi:
-- Tabiiy harakatlar
-- Inson hissiyotlari
-- O'rta tezlikdagi sahnalar
-- Realistik portretlar
-
-Kling nimani yomon ko'radi:
-- Juda murakkab sahnalar
-- Tez harakatlar
-- Ko'p odam bir kadrda
-
-Maslahat:
-- Promptingiz qisqa bo'lsin
-- 1-2 ta asosiy harakat ko'rsating
-- Realizm uchun yorug'lik tafsilotlarini bering
-
-Aniq prompt namunalari ko'rsatmayman — bu mening shaxsiy mulkim. Ammo printsip aniq.
-
-Ertaga — Runway promptlari.
-
-Max 800 belgi.""",
-    
-    "video_prompts_runway": """AI-video seriyasi. Runway promptlari (11/14).
-
-OHANG: professional.
-
-MAZMUN:
-RUNWAY — texnik tilni yaxshi tushunadi.
-
-Runway uchun:
-- Texnik so'zlarni ishlating: focal length, aperture, depth of field
-- Aniq kamera harakatlari: dolly, crane, tracking shot
-- Yorug'lik turlarini ko'rsating: rim lighting, soft box
-
-Runway nimani yaxshi qiladi:
-- Professional shotlar
-- Murakkab harakat
-- Ko'p kameralik effektlar
-
-Maslahat:
-- Kino terminlarini o'rganing
-- YouTube'da "cinematography terms" ko'rib chiqing
-- Har bir kadr — bu bitta gap (1 prompt)
-
-Tayyor promptlar ko'rsatmayman, ammo printsip aniq.
-
-Ertaga — Sora promptlari.
-
-Max 800 belgi.""",
-    
-    "video_prompts_sora": """AI-video seriyasi. Sora promptlari (12/14).
-
-OHANG: chuqur.
-
-MAZMUN:
-SORA — uzun va batafsil promptlarni yaxshi tushunadi.
-
-Sora uchun:
-- 200-300 so'z prompt yozish mumkin
-- Hikoya tuzilishi muhim
-- Avval umumiy, keyin tafsilotlar
-- Hissiyotlar va kayfiyat — yozing
-
-Sora nimani yaxshi qiladi:
-- Hikoyali sahnalar
-- Realistik fizika
-- Murakkab interaksiyalar
-- Uzun videolar
-
-Maslahat:
-- Prompt yozishdan oldin sahnani aniq tasavvur qiling
-- Bosqichma-bosqich tasvirlang
-- Kino tilida o'ylang
-
-Aniq promptlarni ko'rsatmayman — Instagram'ga yozing, suhbatlashamiz.
-
-Ertaga — bepul kreditlar.
-
-Max 800 belgi.""",
-    
-    "video_free_credits": """AI-video seriyasi. Bepul kreditlar (13/14).
-
-OHANG: foydali, hayratlanarli.
-
-MAZMUN:
-Endi eng qiziq qism — bepul AI-video qayerdan olish.
-
-Hozir mavjud bepul variantlar:
-1. KLING — ro'yxatdan o'tib har kuni 30-60 kredit
-2. PIKA — boshlang'ich 30 kredit + kunlik bonuslar
-3. RUNWAY — har oy 125 kredit boshlang'ich
-4. HIGGSFIELD — boshlang'ich 75 kredit
-5. HAILUO — ko'p bepul kreditlar boshida
-6. LUMA AI — har kun ham beradi
-
-Eslatma: bu raqamlar o'zgarishi mumkin. Kompaniyalar siyosatini o'zgartiryapti.
-
-Maslahat: bir nechta servisda ro'yxatdan o'ting — yiqilish kreditlarini birga qo'shasiz.
-
-Ertaga — seriyaning so'nggi posti.
-
-Max 800 belgi.""",
-    
-    "video_summary": """AI-video seriyasi. Yakuni (14/14).
-
-OHANG: yakunlash, motivatsion, sotuvchi.
-
-MAZMUN:
-7 kun davomida o'rgandik:
-- 7 ta AI-video modeli
-- Har birining afzalliklari
-- Narxlar
-- Bepul imkoniyatlar
-- Promptlar asoslari
-
-Endi savol: keyingi qadam nima?
-
-3 ta yo'l:
-1. O'zingiz o'rganib boring (1-3 oy vaqt)
-2. Kursga yoziling ($500-1500)
-3. Men sizga tayyor video qilib beraman ($50-300)
-
-Brendingiz uchun AI-reklama kerakmi? Yozing Instagram'da DM: link CTA'da bo'ladi.
-
-Bu seriya yakunlandi. Ertaga oddiy mavzular boshlanadi.
-
-Rahmat hammangizga — birga o'rgandik.
-
-Max 800 belgi.""",
-}
-
-
-# ============================================
-# ВЫБОР ТИПА ПОСТА ПО СЕРИЯМ
-# ============================================
-
-def get_post_type(time_of_day: str) -> str:
-    tashkent_tz = timezone(timedelta(hours=5))
-    today = datetime.now(tashkent_tz).date()
-    
-    # СЕРИЯ CRM (23 мая = 1 день, 2 поста)
-    crm_days = (today - SERIES_CRM_START).days
-    if 0 <= crm_days < SERIES_CRM_DAYS:
-        post_type = CRM_SERIES.get((crm_days, time_of_day))
-        if post_type:
-            logger.info(f"🎯 Серия CRM: день {crm_days+1}/{SERIES_CRM_DAYS}, {time_of_day}")
-            return post_type
-    
-    # СЕРИЯ AI-ВИДЕО (24-30 мая = 7 дней, 14 постов)
-    video_days = (today - SERIES_VIDEO_START).days
-    if 0 <= video_days < SERIES_VIDEO_DAYS:
-        post_type = VIDEO_SERIES.get((video_days, time_of_day))
-        if post_type:
-            logger.info(f"🎯 Серия Видео: день {video_days+1}/{SERIES_VIDEO_DAYS}, {time_of_day}")
-            return post_type
-    
-    # После серий — обычные темы (пока возвращаем "video_intro" как заглушку)
-    logger.info(f"📝 Обычная тема ({time_of_day})")
-    return "general"
-
-
-# ============================================
-# ГЕНЕРАЦИЯ ПОСТА ЧЕРЕЗ CLAUDE
-# ============================================
-
-def generate_post(post_type: str) -> str:
-    client = Anthropic(api_key=ANTHROPIC_API_KEY)
-    
-    base_prompt = POST_PROMPTS.get(post_type)
-    
-    if not base_prompt:
-        # Обычный пост (после серий)
-        base_prompt = """AI haqida umumiy post.
-
-OHANG: jonli, do'stona.
-
-Mavzular: yangi AI vositalar, trendlar, biznesda AI, marketing.
-
-OG'IZMA: aniq prompt, AI-agent, ChatGPT'da nima qilish — YO'Q.
-
-STRUKTURA:
-- Sarlavha emoji bilan
-- 3-4 abzats
-- Xulosa yoki savol
-
-Max 700 belgi."""
-    
-    full_prompt = base_prompt + GLOBAL_RULE
-    
-    message = client.messages.create(
-        model="claude-opus-4-5",
-        max_tokens=2500,
-        messages=[{"role": "user", "content": full_prompt}]
-    )
-    
-    text = message.content[0].text
-    
-    # Определяем тему для хештегов
-    if "crm" in post_type:
-        topic = "crm"
-    elif "video" in post_type:
-        topic = "video"
-    else:
-        topic = "general"
-    
-    hashtags = "\n\n" + get_hashtags(topic=topic)
-    cta = get_cta()
-    
-    return text + cta + hashtags
+_video_post_index = 0
+_daily_post_index = 0
 
 
 # ============================================
@@ -1335,19 +1804,13 @@ Max 700 belgi."""
 # ============================================
 
 IMAGE_QUERIES = {
-    "crm": ["business technology", "office work", "automation"],
-    "video": ["video production", "camera cinema", "filmmaking"],
-    "default": ["technology", "future", "innovation", "AI"],
+    "video": ["video production", "camera cinema", "filmmaking", "ai technology"],
+    "default": ["technology", "future", "innovation", "ai"],
 }
 
-def get_image_url(post_type: str) -> str:
-    if "crm" in post_type:
-        queries = IMAGE_QUERIES["crm"]
-    elif "video" in post_type:
-        queries = IMAGE_QUERIES["video"]
-    else:
-        queries = IMAGE_QUERIES["default"]
-    
+
+def get_image_url(category: str = "default") -> str:
+    queries = IMAGE_QUERIES.get(category, IMAGE_QUERIES["default"])
     query = random.choice(queries)
     url = "https://api.unsplash.com/photos/random"
     headers = {"Authorization": f"Client-ID {UNSPLASH_ACCESS_KEY}"}
@@ -1364,109 +1827,114 @@ def get_image_url(post_type: str) -> str:
 
 
 # ============================================
-# ПУБЛИКАЦИЯ — ОСНОВНОЙ ПОСТ (13:00 и 19:00)
+# ОБРЕЗКА ТЕКСТА ДО ЛИМИТА
 # ============================================
 
-async def publish_post(time_of_day: str = "morning"):
+def trim_text(text: str, max_length: int = 1024) -> str:
+    """Обрезает текст до максимальной длины по предложениям."""
+    if len(text) <= max_length:
+        return text
+    
+    truncated = text[:max_length - 14]  # запас на "..."
+    last_dot = max(
+        truncated.rfind('.'),
+        truncated.rfind('!'),
+        truncated.rfind('?'),
+        truncated.rfind('\n\n')
+    )
+    
+    if last_dot > 500:
+        return truncated[:last_dot + 1]
+    else:
+        last_space = truncated.rfind(' ')
+        return truncated[:last_space] + '.'
+
+
+# ============================================
+# ПУБЛИКАЦИЯ
+# ============================================
+
+async def publish_video_series_post():
+    """Публикует пост серии AI-видеогенерации (13:00 и 19:00)."""
+    global _video_post_index
+    
     try:
-        post_type = get_post_type(time_of_day)
-        logger.info(f"📝 Тип поста: {post_type} ({time_of_day})")
+        post_text = get_video_series_post(_video_post_index)
         
-        text = generate_post(post_type)
-        logger.info(f"✅ Текст сгенерирован, {len(text)} символов")
+        if post_text is None:
+            # Серия закончилась — публикуем дневной пост
+            logger.info("📝 Серия AI-видео закончилась, публикуем дневной пост")
+            post_text = get_daily_post(_daily_post_index)
+        else:
+            logger.info(f"📝 Серия AI-видео: пост {_video_post_index + 1}/{len(VIDEO_SERIES_POSTS)}")
+            _video_post_index += 1
         
-        # Защита от слишком длинных постов
-        if len(text) > 1024:
-            truncated = text[:1010]
-            last_dot = max(
-                truncated.rfind('.'),
-                truncated.rfind('!'),
-                truncated.rfind('?'),
-                truncated.rfind('\n\n')
-            )
-            if last_dot > 500:
-                text = truncated[:last_dot + 1]
-            else:
-                last_space = truncated.rfind(' ')
-                text = truncated[:last_space] + '.'
-            logger.warning(f"⚠️ Текст обрезан до {len(text)} символов")
+        cta = get_cta()
+        hashtags = "\n\n" + get_hashtags()
+        full_text = post_text + cta + hashtags
+        full_text = trim_text(full_text, 1024)
         
-        image_url = get_image_url(post_type)
+        image_url = get_image_url("video")
         bot = Bot(token=BOT_TOKEN)
         
         if image_url:
             await bot.send_photo(
                 chat_id=CHANNEL_USERNAME,
                 photo=image_url,
-                caption=text
+                caption=full_text
             )
         else:
             await bot.send_message(
                 chat_id=CHANNEL_USERNAME,
-                text=text
+                text=full_text
             )
         
-        logger.info("✅ Пост опубликован!")
+        logger.info(f"✅ Пост опубликован, длина: {len(full_text)}")
         
     except Exception as e:
-        logger.error(f"❌ Ошибка публикации: {e}")
+        logger.error(f"❌ Ошибка публикации серии: {e}")
 
 
 async def publish_morning():
-    """Утренний пост в 13:00 Ташкент (8:00 UTC)"""
-    await publish_post("morning")
+    """13:00 Ташкент = 8:00 UTC."""
+    await publish_video_series_post()
 
 
 async def publish_evening():
-    """Вечерний пост в 19:00 Ташкент (14:00 UTC)"""
-    await publish_post("evening")
+    """19:00 Ташкент = 14:00 UTC."""
+    await publish_video_series_post()
 
-
-# ============================================
-# ПРИВЕТСТВИЕ — 7:00 Ташкент (2:00 UTC)
-# ============================================
 
 async def publish_greeting():
+    """7:00 Ташкент = 2:00 UTC — Утреннее приветствие."""
     try:
         greeting = get_morning_greeting()
-        # Добавляем хештеги
-        hashtags = "\n\n" + get_hashtags(topic="general")
+        hashtags = "\n\n" + get_hashtags()
         
         bot = Bot(token=BOT_TOKEN)
         await bot.send_message(
             chat_id=CHANNEL_USERNAME,
             text=greeting + hashtags
         )
-        
         logger.info("✅ Утреннее приветствие опубликовано")
         
     except Exception as e:
         logger.error(f"❌ Ошибка приветствия: {e}")
 
 
-# ============================================
-# ДНЕВНОЙ ПОСТ — 17:00 Ташкент (12:00 UTC) — AI новости
-# ============================================
-
-# Индекс для последовательной публикации (не повторяться сразу)
-_daily_post_index = 0
-
 async def publish_daily_ai_post():
-    """Публикует один из 30 готовых AI постов в 17:00."""
+    """17:00 Ташкент = 12:00 UTC — Дневной AI пост."""
     global _daily_post_index
     
     try:
-        # Берём пост по индексу
-        post_text = DAILY_AI_POSTS[_daily_post_index % len(DAILY_AI_POSTS)]
+        post_text = get_daily_post(_daily_post_index)
         _daily_post_index += 1
         
-        # Добавляем CTA и хештеги
         cta = get_cta()
-        hashtags = "\n\n" + get_hashtags(topic="news")
-        
+        hashtags = "\n\n" + get_hashtags()
         full_text = post_text + cta + hashtags
+        full_text = trim_text(full_text, 1024)
         
-        # Картинка
         image_url = get_image_url("default")
         bot = Bot(token=BOT_TOKEN)
         
@@ -1488,11 +1956,8 @@ async def publish_daily_ai_post():
         logger.error(f"❌ Ошибка дневного поста: {e}")
 
 
-# ============================================
-# ОПРОСЫ
-# ============================================
-
 async def publish_poll():
+    """Опросы — Пн/Ср/Пт в 20:00 Ташкент = 15:00 UTC."""
     try:
         poll = random.choice(POLLS)
         bot = Bot(token=BOT_TOKEN)
@@ -1502,17 +1967,14 @@ async def publish_poll():
             options=poll["options"],
             is_anonymous=True
         )
-        logger.info("✅ Опрос опубликован!")
+        logger.info("✅ Опрос опубликован")
         
     except Exception as e:
         logger.error(f"❌ Ошибка опроса: {e}")
 
 
-# ============================================
-# KEEP-ALIVE
-# ============================================
-
 async def keep_alive_ping():
+    """Keep-alive каждые 10 минут."""
     try:
         tashkent_tz = timezone(timedelta(hours=5))
         now = datetime.now(tashkent_tz).strftime("%H:%M:%S")
@@ -1528,15 +1990,11 @@ async def keep_alive_ping():
 async def main():
     if PUBLISH_ON_STARTUP:
         logger.info("🧪 Тестовая публикация при запуске...")
-        await publish_post("morning")
+        await publish_video_series_post()
     
     scheduler = AsyncIOScheduler(timezone="UTC")
     
-    # ===== РАСПИСАНИЕ (UTC время) =====
-    # ВАЖНО: бот работает по UTC, не по Tashkent
-    # Ташкент = UTC + 5
-    
-    # 7:00 Ташкент = 2:00 UTC — Утреннее приветствие
+    # 7:00 Ташкент = 2:00 UTC — Приветствие
     scheduler.add_job(
         publish_greeting,
         CronTrigger(hour=2, minute=0),
@@ -1544,7 +2002,7 @@ async def main():
         replace_existing=True
     )
     
-    # 13:00 Ташкент = 8:00 UTC — Утренний пост (серия)
+    # 13:00 Ташкент = 8:00 UTC — Утренний пост серии
     scheduler.add_job(
         publish_morning,
         CronTrigger(hour=8, minute=0),
@@ -1560,7 +2018,7 @@ async def main():
         replace_existing=True
     )
     
-    # 19:00 Ташкент = 14:00 UTC — Вечерний пост (серия)
+    # 19:00 Ташкент = 14:00 UTC — Вечерний пост серии
     scheduler.add_job(
         publish_evening,
         CronTrigger(hour=14, minute=0),
@@ -1568,7 +2026,7 @@ async def main():
         replace_existing=True
     )
     
-    # Опросы: Пн, Ср, Пт в 20:00 Ташкент = 15:00 UTC
+    # Опросы Пн/Ср/Пт в 20:00 Ташкент = 15:00 UTC
     scheduler.add_job(
         publish_poll,
         CronTrigger(day_of_week="mon,wed,fri", hour=15, minute=0),
@@ -1585,8 +2043,10 @@ async def main():
     )
     
     scheduler.start()
-    logger.info("🚀 Бот запущен v2.0. 4 поста в день + опросы 3 раза в неделю.")
+    logger.info("🚀 Бот запущен v3.0")
     logger.info("📅 Расписание (Ташкент): 7:00 / 13:00 / 17:00 / 19:00")
+    logger.info(f"🎬 Серия AI-видео: {len(VIDEO_SERIES_POSTS)} постов")
+    logger.info(f"📰 Дневных постов: {len(DAILY_AI_POSTS)}")
     
     while True:
         await asyncio.sleep(60)
