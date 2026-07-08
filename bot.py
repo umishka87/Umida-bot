@@ -1,26 +1,24 @@
 # -*- coding: utf-8 -*-
 """
-Telegram-бот для канала @AiContentCreatorUZ — ВЕРСИЯ 4.0 (финальная)
+Telegram-бот для канала @AiContentCreatorUZ — ВЕРСИЯ 5.0
+20 дней контента, 2 поста в день (40 постов).
 
-ЧТО ВНУТРИ:
-- 20 постов на 10 дней (2 поста в день: 10:00 и 19:00 Ташкент)
-- Ротация CTA и хештегов
-- Опросы Пн/Ср/Пт
-- Все промпты (Nano Banana 2, Kling, Hollywood, еда, одежда)
+СТРУКТУРА (день цикла 1..20):
+  УТРО (10:00 Ташкент = 05:00 UTC):
+    - обычные дни -> НОВОСТЬ
+    - дни 5, 10, 15, 20 -> ОБУЧЕНИЕ (мини-урок про Krea/приёмы)
+  ВЕЧЕР (19:00 Ташкент = 14:00 UTC):
+    - обычные дни -> ПРОМПТ
+    - дни 5, 10, 15, 20 -> БЕСПЛАТНЫЕ РЕСУРСЫ
 
-КЛЮЧЕВЫЕ ИСПРАВЛЕНИЯ:
-- Индекс поста вычисляется ИЗ ДАТЫ (не из файла). На Railway /tmp стирается
-  при каждой перезаливке, поэтому файл не спасал от повторов. Теперь день
-  цикла = (сегодня - EPOCH) % 10. Сбросить нечего, повтор внутри цикла невозможен.
-- Длинные посты (промпты) уходят ОТДЕЛЬНЫМ ТЕКСТОВЫМ сообщением (лимит 4096),
-  чтобы промпт не обрезался. Короткие — с картинкой (лимит подписи 1024).
-- Факты обновлены: MidJourney V8.1, Higgsfield "Soul Cinema", Claude Fable 5,
-  ChatGPT 900 млн/нед, Microsoft 15 000+ сокращений, Klarna (с нюансом).
+ФИКС ПОВТОРОВ:
+  День цикла = (сегодня - EPOCH) % 20. Считается из даты, файл не нужен,
+  при перезапуске/перезаливке ничего не сбрасывается.
 
-Расписание (сервер в UTC, Ташкент = UTC+5):
-  10:00 Ташкент = 05:00 UTC — утренний пост (новости)
-  19:00 Ташкент = 14:00 UTC — вечерний пост (промпт/совет)
-  20:00 Ташкент = 15:00 UTC — опрос (Пн/Ср/Пт)
+ДЛИННЫЕ ПОСТЫ (промпты) -> уходят отдельным ТЕКСТОМ (до 4096), не обрезаются.
+КОРОТКИЕ -> с картинкой (Unsplash), лимит подписи 1024.
+
+Без опросов. CTA (Instagram) и хештеги бот подставляет сам.
 """
 
 import os
@@ -46,30 +44,27 @@ INSTAGRAM_URL = "https://www.instagram.com/umishka_abdukarimova?utm_source=qr"
 PUBLISH_ON_STARTUP = False
 TELEGRAM_CAPTION_LIMIT = 1024
 
-# День цикла считается от этой даты. 10-дневный цикл.
 EPOCH = date(2026, 1, 1)
-CYCLE_DAYS = 10
+CYCLE_DAYS = 20
+LESSON_DAYS = {5, 10, 15, 20}   # дни, когда утро=обучение, вечер=бесплатные ресурсы
 
-logging.basicConfig(
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    level=logging.INFO,
-)
+logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 bot = Bot(token=BOT_TOKEN)
 
 
 # ============================================
-# ИНДЕКС ИЗ ДАТЫ (вместо файла) — фикс повторов
+# ИНДЕКС ИЗ ДАТЫ
 # ============================================
-def cycle_index() -> int:
-    """0..9 — какой день 10-дневного цикла сегодня (по UTC-дате)."""
+def cycle_day() -> int:
+    """1..20 — день цикла (по UTC-дате)."""
     today = datetime.now(timezone.utc).date()
-    return (today - EPOCH).days % CYCLE_DAYS
+    return (today - EPOCH).days % CYCLE_DAYS + 1
 
 
 # ============================================
-# ХЕШТЕГИ — ТОЛЬКО РАБОЧИЕ (одобренный список)
+# ХЕШТЕГИ (одобренный список)
 # ============================================
 HASHTAGS_MAIN = ["#uzbekistan", "#tashkent", "#toshkent", "#uzb", "#uzbek", "#uzbekiston", "#tashkentcity"]
 HASHTAGS_REGIONS = ["#andijon", "#namangan", "#samarkand", "#buxoro", "#fargona"]
@@ -78,20 +73,20 @@ HASHTAGS_CULTURE = ["#uzbekcha", "#uzbegim", "#uzbeks"]
 
 
 def get_hashtags() -> str:
-    selected = []
-    selected += random.sample(HASHTAGS_MAIN, 4)
-    selected += random.sample(HASHTAGS_REGIONS, 2)
-    selected += random.sample(HASHTAGS_TELEGRAM, 2)
-    selected += random.sample(HASHTAGS_CULTURE, 2)
-    return " ".join(selected)
+    s = []
+    s += random.sample(HASHTAGS_MAIN, 4)
+    s += random.sample(HASHTAGS_REGIONS, 2)
+    s += random.sample(HASHTAGS_TELEGRAM, 2)
+    s += random.sample(HASHTAGS_CULTURE, 2)
+    return " ".join(s)
 
 
 # ============================================
-# CTA — ротация (с Instagram и без)
+# CTA (ротация)
 # ============================================
 CTA_LIST = [
     f"\n\n📸 Mening ishlarim: {INSTAGRAM_URL}",
-    f"\n\n💼 Brendingiz uchun AI-video kerakmi? {INSTAGRAM_URL}",
+    f"\n\n💼 Brendingiz uchun AI-kontent kerakmi? {INSTAGRAM_URL}",
     f"\n\n🎬 AI-reklama namunalari: {INSTAGRAM_URL}",
     "\n\n🔥 Foydali bo'lsa — yurakcha bosing",
     "\n\n💾 Postni saqlab qo'ying — kerak bo'ladi",
@@ -105,478 +100,461 @@ def get_cta() -> str:
 
 
 # ============================================
-# УТРЕННИЕ ПОСТЫ (10:00) — новости. Индекс 0..9 = день цикла.
+# НОВОСТИ — 16 штук (утро обычных дней)
 # ============================================
-MORNING_POSTS = [
-    # ---- День 1: MidJourney V8.1 ----
-    """🆕 MidJourney V8.1 — sifat yangi darajada
+NEWS_POSTS = [
+    # 1
+    """🆕 OpenAI GPT-5.6 chiqardi — Sol, Terra, Luna
 
-Hurmatli do'stlar, MidJourney'ning eng yangi versiyasi V8.1 endi asosiy versiyaga aylandi.
+Hurmatli do'stlar, OpenAI uchta yangi model chiqardi: GPT-5.6 Sol, Terra va Luna.
+
+Nima muhim:
+✅ Sol — eng kuchli, kod va murakkab vazifalar uchun
+✅ Terra — GPT-5.5 darajasida, lekin arzonroq
+✅ Luna — eng tejamkor, ko'p ish uchun
+
+Boshida faqat tanlangan hamkorlarga berildi, keyin hammaga ochilmoqda.
+
+AI poygasi tezlashyapti — har oy yangi model. Bizga foyda: sifat oshadi, narx tushadi.""",
+    # 2
+    """🆕 Anthropic Claude Sonnet 5 chiqardi
+
+Hurmatli do'stlar, Claude'ni yaratuvchi Anthropic yangi model chiqardi — Claude Sonnet 5.
+
+Nima muhim:
+✅ Bepul va Pro foydalanuvchilar uchun asosiy model bo'ldi
+✅ Matn, kod, tahlil — yuqori sifatda
+✅ Tez va ishonchli
+
+Kreator uchun: ssenariy, post matni, tarjima, g'oyalar — hammasini kuchli bajaradi.
+
+Claude'dan foydalanasizmi? Sharhlarda yozing.""",
+    # 3
+    """🆕 Google Gemma 4 — kompyuteringizda bepul ishlaydi
+
+Hurmatli do'stlar, Google yangi ochiq model chiqardi — Gemma 4 12B.
+
+Nima ajoyib:
+✅ Internetsiz, o'z kompyuteringizda ishlaydi
+✅ Atigi 16 GB xotira yetarli
+✅ Matn, rasm va ovozni tushunadi
+✅ Bepul
+
+Bu shuni anglatadi: kuchli AI endi faqat bulutda emas, shaxsiy laptopda ham.""",
+    # 4
+    """🆕 NVIDIA Nemotron — bitta modelda ko'radi, eshitadi, o'qiydi
+
+Hurmatli do'stlar, NVIDIA yangi model chiqardi — Nemotron 3 Nano Omni.
+
+Nima muhim:
+✅ Rasm, ovoz va matnni bitta modelda birlashtiradi
+✅ Boshqa ochiq modellardan 9 barobar tezroq
+✅ Hujjat, video, audio tahlilida yetakchi
+
+Ochiq model — dasturchilar bepul ishlata oladi. AI tez rivojlanyapti.""",
+    # 5
+    """🆕 Xitoy AI'da yaqinlashyapti — GLM-5.2
+
+Hurmatli do'stlar, Xitoyning Z.ai kompaniyasi arzon, lekin kuchli model chiqardi — GLM-5.2.
+
+Nima muhim:
+✅ Kod yozishda eng kuchli ochiq modellardan
+✅ 1 million so'zgacha kontekst
+✅ Ochiq litsenziya — o'z serveringizda ishlatasiz
+✅ Amerika modellariga raqobat
+
+AI endi faqat AQSH emas — dunyo poygasi. Bu narxni tushiradi.""",
+    # 6
+    """🆕 Google Gemini jonli tarjimon bo'ldi
+
+Hurmatli do'stlar, Gemini'ga jonli tarjima qo'shildi — Live Translate.
+
+Nima muhim:
+✅ Suhbatni real vaqtda tarjima qiladi
+✅ Ovozli muloqot uchun
+✅ Google Meet va Translate ilovasida
+
+Bu til to'sig'ini yo'q qiladi — chet ellik mijoz bilan ishlash osonlashadi.
+
+Sizga qaysi til kerak bo'lardi? Sharhlarda yozing.""",
+    # 7
+    """🆕 MidJourney V8.1 — yangi standart
+
+Hurmatli do'stlar, MidJourney'ning V8.1 versiyasi asosiy versiyaga aylandi.
 
 Yangiliklar:
-
 🎯 Native 2K (HD) — alohida upscale kerak emas
-⚡ 4-5 barobar tezroq generatsiya
-📝 Matn yozish aniqlashdi — logotip va banner uchun
+⚡ 4-5 barobar tezroq
+📝 Matn (logotip, banner) aniqlashdi
 🧠 Murakkab promptlarni yaxshiroq tushunadi
 
-V8.1 Syntx agregatorida ham bor.
-
-Kim uchun muhim:
-✅ Dizaynerlar
-✅ Brending
-✅ Poster va banner
-✅ Mahsulot reklamasi
-
-Reklama uchun MidJourney + Kling video = eng kuchli juftlik 2026 yilda.""",
-
-    # ---- День 2: Higgsfield Arena Zero (Soul Cinema) ----
+Reklama uchun MidJourney + Kling = eng kuchli juftlik 2026 yilda.""",
+    # 8
     """🎬 Higgsfield AI-serial yaratdi — "Arena Zero"
 
-Hurmatli do'stlar, Higgsfield'ning "Soul Cinema" vositasi yordamida to'liq AI bilan yaratilgan 10 daqiqalik ilmiy-fantastik serial chiqdi.
+Hurmatli do'stlar, Higgsfield'ning "Soul Cinema" vositasida to'liq AI bilan yaratilgan 10 daqiqalik ilmiy-fantastik serial chiqdi.
 
 Sof AI:
-✅ Personajlar — AI
-✅ Sahnalar — AI
-✅ Kamera harakati — AI
-✅ Yorug'lik va musiqa — AI
+✅ Personaj, sahna, kamera, ovoz — hammasi AI
 ✅ Atigi 4 kishilik jamoa
 
-Nima anglatadi:
+Nima anglatadi: kichik studiyalar endi million dollar byudjetsiz kontent qila oladi.
 
-Kichik studiyalar endi Netflix darajasidagi kontent qila oladi — million dollar byudjet kerak emas.
-
-Real oqibatlar:
-🎯 Reklama studiyalari qisqaradi
-🎯 Kichik kreatorlar katta loyiha qila oladi
-🎯 Kontent narxi keskin tushadi
-
-Siz ham qila olasiz. Higgsfield obunasi $30/oydan.""",
-
-    # ---- День 3: Grok 4.3 ----
-    """🆕 Grok 4.3 (xAI'dan) — endi PDF va slaydlar
-
-Hurmatli do'stlar, Elon Musk kompaniyasi xAI yangi versiya chiqardi — Grok 4.3.
-
-Nima yangi:
-
-📄 PDF fayllar
-📊 Slaydlar (PowerPoint)
-📈 Jadvallar (Excel)
-📝 Hujjatlar (Word)
-
-Ya'ni: ilgari matnni boshqa joyda fayl qilish kerak edi. Endi Grok hammasini o'zi qiladi.
-
-Kim uchun foydali:
-✅ Biznes — taqdimotlar tezroq
-✅ O'qituvchilar — material
-✅ Talabalar — kursovoy ishlar
-✅ Marketing — hisobotlar
-
-Qayerda: X Premium va SuperGrok obunalari orqali.
-
-X'da bo'lmasangiz — ChatGPT yoki Claude ham bu ishlarni yaxshi bajaradi.""",
-
-    # ---- День 4: Google Vids + Veo 3.1 ----
-    """🆕 Google Vids endi Veo 3.1 va Lyria 3 bilan ishlaydi
+Kinoning kelajagi shunday.""",
+    # 9
+    """🆕 Google Vids endi Veo 3.1 bilan ishlaydi
 
 Hurmatli do'stlar, Google video-redaktori "Vids" ichiga kuchli AI qo'shildi.
 
 Yangiliklar:
-
 🎬 Veo 3.1 — video bevosita Vids ichida generatsiya
 🎵 Lyria 3 — musiqa va ovoz uchun
 
 Nima muhim:
-
 ✅ Bir dasturdan boshqasiga o'tish kerak emas
-✅ Hammasi bir joyda — video, ovoz, musiqa
-✅ Reklama uchun katta tejov
+✅ Video, ovoz, musiqa — bir joyda
 
-Google bozorda Adobe va CapCut'ga raqobat boshlayapti.
+Google Adobe va CapCut'ga raqobat boshlayapti.""",
+    # 10
+    """🆕 Gemini ChatGPT va Claude tarixini ko'chiradi
 
-Bu kontent yaratuvchilar uchun ajoyib — yagona joyda hamma vosita.""",
-
-    # ---- День 5: Claude Fable 5 (вместо Mythos) ----
-    """🆕 Anthropic eng kuchli modelini ommaga chiqardi — Claude Fable 5
-
-Hurmatli do'stlar, Claude'ni yaratuvchi Anthropic yangi kuchli model chiqardi.
-
-Nima ma'lum:
-
-🎯 Yangi model — Claude Fable 5
-📊 Hozirgi Opus 4.8 bilan bir qatorda eng kuchlilardan
-🔬 Xavfli sohalarda (kiberxavfsizlik, biologiya) himoya o'rnatilgan
-✅ Pullik obunachilar va bizneslar uchun ochiq
-
-Nima muhim:
-
-Anthropic'da "Mythos" degan o'ta kuchli model bor edi, lekin u faqat tanlangan kompaniyalarga berilgan. Fable 5 — shu darajadagi, ammo ommaga ochiq model.
-
-Claude — kod va matn ishi uchun eng yaxshilaridan. Ssenariy, post matni, tarjima — yuqori sifatda.
-
-AI poygasi tezlashyapti. Kuzatib boring.""",
-
-    # ---- День 6: AdCreative.ai ----
-    """🆕 AdCreative.ai — reklama bannerlari uchun AI
-
-Hurmatli do'stlar, foydali xizmat — AdCreative.ai.
-
-Nima qila oladi:
-
-🎨 Reklama banner generatsiya
-✍️ Sotuvga moslangan matnlar
-🎯 Sarlavhalar
-🖼️ Vizual uslublar
-📊 To'liq reklama kampaniyalari
-
-Bir necha soniyada — vaqtni tejaydi.
-
-Kim uchun:
-✅ Marketing
-✅ Kichik biznes
-✅ Instagram reklamasi
-✅ E-commerce do'konlar
-
-Ilgari dizayner + marketolog kerak edi. Endi bitta vosita ko'p ishni qiladi.
-
-AI har soha uchun yechim taklif qiladi.""",
-
-    # ---- День 7: Gemini import ----
-    """🆕 Google Gemini endi ChatGPT va Claude tarixini ko'chiradi
-
-Hurmatli do'stlar, Google katta yangilik qildi.
+Hurmatli do'stlar, Google qiziq imkoniyat qo'shdi.
 
 Nima yangi:
-
-📥 Gemini'da yangi funksiya — boshqa AI-xizmatlardan suhbat tarixi va "xotira"ni import qilish mumkin
-
-Bu nima anglatadi:
-
-ChatGPT yoki Claude'dan Gemini'ga o'tsangiz — noldan boshlash shart emas. Eski suhbatlaringiz ko'chiriladi.
-
-Nima muhim:
-
-🎯 AI-xizmatlar orasida raqobat keskinlashdi
-🎯 Platforma almashtirish oson bo'ldi
-
-Diqqat: ko'chirilgan suhbatlar Google serverida saqlanadi. Maxfiy ma'lumot yuklamang.
-
-Qaysi AI'ni asosiy qilib ishlatasiz?""",
-
-    # ---- День 8: AI инвестиции в регионе ----
-    """🆕 Mintaqada AI investitsiyalari tezlashyapti
-
-Hurmatli do'stlar, MDH mintaqasida AI bo'yicha yirik loyihalar paydo bo'lyapti.
-
-Masalan Armanistonda:
-
-💰 Yirik investitsiya
-🏢 Yangi AI data-centr
-🤝 Xalqaro texnologiya kompaniyalari hamkor
+📥 Gemini'ga ChatGPT yoki Claude'dagi eski suhbatlarni ko'chirish mumkin
 
 Bu nima anglatadi:
+✅ Yangi AI'ga o'tsangiz — noldan boshlash shart emas
+✅ Platforma almashtirish oson
 
-🎯 Mintaqada AI quvvati o'sayapti
-🎯 Lokal AI-xizmatlar paydo bo'ladi
-🎯 AI mutaxassislar uchun ish o'rinlari
-
-O'zbekistonda AI hozir bo'sh bozor. Birinchilar eng yaxshi joyni egallaydi. Bu sizning imkoniyatingiz.
-
-Hozir o'rganing — keyin kech bo'ladi.""",
-
-    # ---- День 9: ChatGPT 900 млн ----
+Diqqat: ko'chirilgan suhbatlar Google serverida saqlanadi. Maxfiy ma'lumot yuklamang.""",
+    # 11
     """📊 ChatGPT — haftada 900 mln foydalanuvchi
 
 Hurmatli do'stlar, bu raqamga e'tibor bering.
 
-ChatGPT statistikasi:
-
-🌍 Haftada 900 mln aktiv foydalanuvchi (2026)
-📈 Oyiga 1 milliarddan oshdi
-⚡ Internet 100 mln'ga 7 yil kerak edi, ChatGPT — bir necha oy
-
-Bu tarixdagi eng tez tarqalgan texnologiya.
+✅ Haftada 900 mln aktiv foydalanuvchi
+✅ Oyiga 1 milliarddan oshdi
+✅ Tarixdagi eng tez tarqalgan texnologiya
 
 Nima anglatadi sizga:
-
 🎯 AI endi "kelajak" emas — bugun
-🎯 AI'ni o'rganmoq — yangi savod, 100 yil oldingi o'qish-yozish kabi
+🎯 AI'ni bilish — yangi savod, o'qish-yozish kabi
 
-Savol o'zingizga: siz qancha vaqt AI bilan ishlaysiz — har kuni? Haftada bir? Hech qachon?
+Siz qancha vaqt AI bilan ishlaysiz?""",
+    # 12
+    """🆕 GitHub Copilot pullik hisoblashga o'tdi
 
-Javob — sizning kelajagingiz.""",
+Hurmatli do'stlar, dasturchilar uchun mashhur GitHub Copilot to'lov tizimini o'zgartirdi.
 
-    # ---- День 10: тренды 2026 (без HeyGen) ----
-    """🚀 AI trendlari 2026 — nima muhim
+Nima o'zgardi:
+✅ Endi ishlatilganiga qarab to'lov (metered)
+✅ "AI kreditlari" tizimi joriy etildi
 
-Hurmatli do'stlar, bu yil AI dunyosida asosiy trendlar.
+Sabab: murakkab AI-kod sessiyalari qimmatga tushyapti, eski "cheksiz" tarif foydasiz bo'ldi.
 
-Eng muhimlari:
+Bu butun soha trendi — bepul davri asta tugayapti.""",
+    # 13
+    """🆕 OpenAI birjaga chiqishga tayyorlanyapti (IPO)
 
-1️⃣ Native ovoz va lablar — video to'liq ovozli
-2️⃣ Uzun videolar — 30-60 soniya endi standart
-3️⃣ Personaj consistency — bir personaj turli sahnada bir xil
-4️⃣ Multi-shot — bitta promptdan butun hikoya
-5️⃣ 4K vertikal — Reels va TikTok uchun
-6️⃣ AI + real foto — odam real, fon AI
-7️⃣ Gapiruvchi avatarlar — alohida katta yo'nalish (keyingi oyda batafsil)
-8️⃣ Open-source modellar — kompyuterda bepul
-9️⃣ Real vaqtli generatsiya — yaqin kelajakda
-🔟 Tamoyillar muhim — yorug'lik, kompozitsiya, prompt strukturasi
+Hurmatli do'stlar, ChatGPT'ni yaratuvchi OpenAI rasman IPO'ga hujjat topshirdi.
 
-Trendlarni kuzating, lekin chuqurlikka boring.""",
+Nima ma'lum:
+✅ Kompaniya bahosi — 852 mlrd dollar
+✅ Tez orada aksiyalar sotuvga chiqishi mumkin
+
+Nima anglatadi: AI endi katta biznes va iqtisodning markazida. Bu sohaga pul va e'tibor oqib kelyapti.
+
+AI'ni bilgan odam bu to'lqinda yutadi.""",
+    # 14
+    """🆕 Dunyoning birinchi AI-san'at muzeyi ochildi
+
+Hurmatli do'stlar, Google Los-Anjelesda "Dataland" — dunyoning birinchi AI-san'at muzeyini quvvatladi.
+
+Nima ajoyib:
+✅ San'at asarlari real vaqtda AI tomonidan yaratiladi
+✅ Interaktiv — tomoshabin bilan "gaplashadi"
+✅ 25 000 kv.metr maydon
+
+AI endi faqat vosita emas — san'at ham. Kelajak shu yerda boshlanyapti.""",
+    # 15
+    """🆕 xAI Grok 4.5 — tez orada ommaga
+
+Hurmatli do'stlar, Elon Musk kompaniyasi xAI yangi model tayyorlayapti — Grok 4.5.
+
+Nima ma'lum:
+✅ Hozir SpaceX va Tesla'da yopiq sinovda
+✅ Juda katta va kuchli model
+✅ Yaqin oylarda ommaga chiqishi kutilmoqda
+
+xAI har oy yangilik chiqaryapti. AI poygasi to'xtamayapti — kuzatib boring.""",
+    # 16
+    """🆕 Krea — 30 million foydalanuvchidan oshdi
+
+Hurmatli do'stlar, Krea platformasi 30 milliondan ortiq foydalanuvchiga yetdi (191 mamlakat).
+
+Nima uchun mashhur:
+✅ 60+ AI-modelni bitta joyda beradi (Flux, Kling, Veo va boshqalar)
+✅ Realtime Canvas — chizasiz, rasm darhol paydo bo'ladi
+✅ Rasmni 22K gacha kattalashtirish (upscale)
+✅ Bepul kunlik kredit bor
+
+Bitta platformada ko'p vosita — vaqt tejaladi. (Krea haqida darslar oldinda!)""",
 ]
 
 
 # ============================================
-# ВЕЧЕРНИЕ ПОСТЫ (19:00) — промпты и психология. Индекс 0..9 = день цикла.
+# ОБУЧЕНИЕ — 4 штуки (утро дней 5/10/15/20)
 # ============================================
-EVENING_POSTS = [
-    # ---- День 1: PROMPT "Fight Club" avatar ----
-    """🎨 PROMPT: Avatar "Fight Club" uslubida
+LESSON_POSTS = [
+    # для дня 5
+    """📚 DARS: Krea nima va Realtime Canvas qanday ishlaydi
 
-Hurmatli do'stlar, bugun tayyor prompt — o'zingizga kinostil avatar.
+Hurmatli do'stlar, bugun qisqacha — Krea nima.
 
-NIMA KERAK:
-1. Sizning fotosurat (yuz aniq)
-2. Referens fotosurat (kerakli uslub)
-3. Nano Banana 2 — botda yoki saytda
+Krea — brauzerda ishlaydigan AI-ijod platformasi. Bir joyda: rasm, video, upscale va 60+ model.
 
-PROMPT (nusxa oling):
+Eng qiziq narsa — Realtime Canvas:
+✅ Siz oddiy shakl chizasiz yoki prompt yozasiz
+✅ AI darhol (bir soniyada) real rasmga aylantiradi
+✅ Kutish yo'q — o'zgartirasiz va natijani ko'rasiz
 
-Use Image 1 as face reference (identity, features, skin tone, hair). Use Image 2 as scene reference (lighting, pose, atmosphere). Replace face in Image 2 with person from Image 1. Keep identity, facial structure, skin tone, natural details from Image 1. Body should naturally match face — not a simple face swap. Keep expression, camera angle, dramatic lighting from Image 2. Blend skin tones perfectly, match shadows and color grading. Keep background, clothing, environment identical to Image 2. Ultra-realistic, high detail, cinematic lighting, sharp focus, natural skin texture, professional photography.
+Nima uchun foydali: g'oyani tez sinash uchun zo'r. Boshlash bepul — karta shart emas.
 
-QANDAY ISHLATISH:
-1. Nano Banana 2 ga kiring
-2. Ikkita rasm yuklang (siz + referens)
-3. Promptni qo'ying
-4. 30 soniya kuting
-5. Tayyor!
+Keyingi darslarda: upscale, negative prompt va o'lchamlar.""",
+    # для дня 10
+    """📚 DARS: Krea'da eski yoki xira fotoni yaxshilash (upscale)
 
-Maslahat: referens rasmi sifatli bo'lsin — yorug'lik aniq.""",
+Hurmatli do'stlar, bugun foydali ko'nikma — xira rasmni tiniq qilish.
 
-    # ---- День 2: PROMPT сюрреализм ----
-    """🎨 PROMPT: Syurrealistik portret fashion uslubida
+Krea'da upscale — bu rasmni sifatini oshirib, kattalashtirish.
 
-Hurmatli do'stlar, bugun tayyor prompt — Vogue darajasidagi portret.
+Qadamlar:
+1. Krea'ga kiring, Enhance / Upscale bo'limini tanlang
+2. Eski yoki xira rasmni yuklang
+3. Sifat darajasini tanlang
+4. Generatsiya — rasm tiniqroq bo'ladi
 
-KONSEPT: bitta odam ikki versiyada. Kattalashgan yuz sochlaridan ikkinchi versiya osilib turadi.
+Kimga kerak:
+✅ Do'kon — eski mahsulot rasmlari
+✅ Ko'chmas mulk — xira interyer fotolar
+✅ Shaxsiy — eski oilaviy suratlar
 
-NIMA KERAK:
-1. Sizning fotosurat
-2. Nano Banana 2
+Maslahat: juda buzuq rasmni mukammal qilib bo'lmaydi, lekin ancha yaxshilaydi.""",
+    # для дня 15
+    """📚 DARS: Negative prompt — ortiqcha narsani olib tashlash
 
-PROMPT (nusxa oling):
+Hurmatli do'stlar, bugun muhim ustalik — negative prompt.
 
-Create a surreal high-fashion portrait with extreme scale distortion. Two versions of the same person in frame. Foreground: massive close-up of the face dominating the top-center, looking down toward viewer, playful expression, natural skin texture. Background: full-length version of the same person swinging from the giant hair of the foreground head, laughing, confident, wearing a streetwear jacket. Environment: lush green meadow with tall wildflowers reaching into the sky. Bright editorial lighting, crisp definition, rim light. Wide-angle lens 24-28mm effect, extreme foreground scale exaggeration. Mood: playful, bold, fashion-campaign energy. Vibrant tones, rich greens, magazine editorial finish. Ultra-realistic photography, high micro-detail, no CGI gloss, no text, no watermark.
+Oddiy prompt: nima KERAK ekanini yozasiz.
+Negative prompt: nima KERAK EMAS ekanini yozasiz.
 
-QANDAY:
-1. Nano Banana 2 ga rasm yuklang
-2. Promptni qo'ying
-3. Generatsiya — 1-2 marta sinang
+Masalan yozing:
+"no text, no watermark, no extra fingers, no blur, low quality"
 
-Maslahat: "wide-angle lens" so'zlari dramatik effekt beradi — olib tashlamang.""",
+Natija: AI shu narsalardan qochadi — rasm toza chiqadi.
 
-    # ---- День 3: психология одиночества ----
-    """💬 "Hech kim meni tushunmaydi" — AI-kreator yolg'izligi
+Qayerda ishlaydi: Krea, MidJourney va ko'p boshqa vositalarda.
 
-Hurmatli do'stlar, bu post shaxsiy. Lekin bilaman — siz ham buni his qilasiz.
+Maslahat: agar rasmda doim bir xil xato chiqsa (masalan ortiqcha barmoq), uni negative promptga yozing.""",
+    # для дня 20
+    """📚 DARS: Aspect ratio — bitta prompt, turli o'lchamlar
 
-Qanday ko'rinadi:
+Hurmatli do'stlar, bugun oxirgi dars — o'lcham (aspect ratio).
 
-🌙 Tunda promptlar yozasiz
-🌙 Oila: "Yana kompyuter? Boshqa ish yo'q?"
-🌙 5 soat ishladingiz, lekin "rasm chizdim" deyish bolaning ishidek tuyuladi
-🌙 O'sishingiz "nimadir g'alati" deb baholanadi
+Bitta prompt, lekin turli joy uchun turli o'lcham kerak:
+✅ 1:1 — Instagram post (kvadrat)
+✅ 9:16 — Reels, Stories, TikTok (vertikal)
+✅ 16:9 — YouTube, banner, prezentatsiya (gorizontal)
 
-Bu normalmi? Mutlaqo.
+Nima uchun muhim:
+Agar o'lchamni noto'g'ri tanlasangiz — rasm kesiladi yoki cho'ziladi. To'g'ri o'lcham = professional ko'rinish.
 
-AI-kreator kasbi yangi. Yaqinlaringiz nimani his qilayotganingizni bilmaydi.
+Maslahat: mijozga ish qilishdan oldin qayerga qo'yilishini so'rang, keyin o'lchamni tanlang.
 
-Nima qilish kerak:
-
-✅ Yaqinlardan to'liq tushunish kutmang
-✅ Boshqa kreatorlar bilan ulashing — Telegram, Instagram, YouTube
-✅ Ishingizni faktlar bilan o'lchang
-
-Kuchli kreatorlar yolg'izlikdan qochmaydi — ular uni tushunadi va hamjamiyatga tayanadi.
-
-Bu — kasbda yetuklik.""",
-
-    # ---- День 4: старт с Claude Code (заменён выдуманный топ-10) ----
-    """💡 Claude Code bilan dasturlashni qanday boshlash
-
-Hurmatli do'stlar, dasturchi bo'lmasangiz ham AI yordamida kod yozish mumkin. Claude Code — buning eng oson yo'li.
-
-NIMADAN BOSHLASH:
-
-1. Claude'ning rasmiy hujjatlari (docs.claude.com) — bepul, qadamba-qadam
-2. Kichik loyihadan boshlang — oddiy bot yoki bitta sahifa
-3. Vazifani sodda til bilan tushuntiring — Claude kodni yozadi
-4. Xato chiqsa — xatoni nusxalab Claude'ga bering, u tuzatadi
-
-MASLAHATLAR:
-
-✅ Katta vazifani kichik qadamlarga bo'ling
-✅ "Nega bunday?" deb so'rang — Claude tushuntiradi, siz o'rganasiz
-✅ Ishlagan kodni saqlab boring
-
-Til to'siq emas — minimal ingliz bilim kifoya.
-
-Men ham shu yo'l bilan o'rgandim. Siz ham qila olasiz.
-
-Dasturlashni o'rganmoqchimisiz? Sharhlarda yozing.""",
-
-    # ---- День 5: PROMPT Kling 3.0 ----
-    """🎬 PROMPT: Kinematografik portret Kling 3.0 da
-
-Hurmatli do'stlar, bugun prompt Kling 3.0 uchun — reklama darajasidagi natija.
-
-NIMA KERAK:
-1. Sizning yoki mahsulot rasmi
-2. Kling 3.0
-
-PROMPT (nusxa oling):
-
-Cinematic portrait shot, professional model, natural makeup, soft golden hour lighting, shallow depth of field, slow push-in camera movement, warm color grading, film grain texture, 4K quality, photorealistic, smooth movement, natural facial expressions, subtle smile transitioning to a confident look, eyes following the light source, hair slightly moving in a gentle breeze, background blurred warm bokeh, editorial fashion photography style.
-
-QANDAY:
-1. Kling.ai ga kiring (bepul kunlik kredit bor)
-2. Image-to-video tanlang
-3. Rasm yuklang
-4. Promptni qo'ying
-5. Sifat: HD yoki 4K, davomiyligi 5-10 soniya
-6. Generatsiya
-
-Natija: reklama darajasidagi video — sosial tarmoq, brending, portfel uchun.
-
-Kling 3.0 — 2026 yilning yetakchi video modellaridan. Bepul tarif tijoriy ish uchun emas.""",
-
-    # ---- День 6: совет 1+1+1 ----
-    """💡 "1+1+1 qoidasi" — qaysi vositalarni tanlash
-
-Hurmatli do'stlar, ko'pchilik so'raydi: "10 ta model bor — qaysi birini tanlash?"
-
-XATO YO'L: hammasini sinab ko'rish. Bu charchatadi, natija yo'q.
-
-TO'G'RI YO'L: 1+1+1 qoidasi.
-
-🎨 1 ta model rasm uchun (MidJourney yoki Flux yoki Nano Banana 2)
-🎬 1 ta model video uchun (Kling yoki Runway yoki Veo)
-🧠 1 ta yordamchi matn uchun (ChatGPT yoki Claude)
-
-Shu 3 ta vositada 3-6 oy chuqur ishlang.
-
-Nima uchun ishlaydi:
-
-🎯 Bir vositada 100 marta ishlash — 10 ta vositada 1 martadan kuchli
-🎯 Mijoz tajribangizni payqaydi
-🎯 Modellar o'zgaradi, tamoyillar bir xil — tamoyillarni o'rganing
-
-Yangi model chiqdi? 30 daqiqa sinang. Yoqdi — davom eting. Yo'q — eskingizga qayting.
-
-AI marafon, sprint emas.""",
-
-    # ---- День 7: PROMPT еда ----
-    """🍔 PROMPT: Restoran taom rasmi Nano Banana 2 da
-
-Hurmatli do'stlar, restoran va kafe egalari — bu siz uchun.
-
-NIMA KERAK:
-1. Taomning rasmi
-2. Nano Banana 2
-
-PROMPT (nusxa oling):
-
-Professional food photography of [dish name], close-up macro shot, steam rising, glistening textures, natural ingredients visible, golden warm lighting from the side, dark moody background, shallow depth of field, water droplets on fresh ingredients, appetizing colors, rich saturation, food magazine editorial style, photorealistic, ultra detailed textures, professional studio lighting, beautiful plating, garnishes visible, perfect composition, mouth-watering presentation.
-
-[dish name] o'rniga yozing: "lagman" yoki "plov" yoki "shashlik" — istalgan taom.
-
-QANDAY:
-1. Nano Banana 2 ga kiring
-2. Taom rasmini yuklang
-3. Promptni qo'ying
-4. Generatsiya
-
-Natija: Instagram va menyu uchun professional rasm. Fotografga $200-500 emas — arzon.
-
-Maslahat: "appetizing", "steaming hot", "fresh" so'zlari natijani tabiiy qiladi.""",
-
-    # ---- День 8: PROMPT одежда (Kling) ----
-    """👗 PROMPT: Kiyim brendi uchun video Kling'da
-
-Hurmatli do'stlar, kiyim do'koni egalari — bu siz uchun.
-
-NIMA KERAK:
-1. Kiyim katalog rasmi
-2. Kling 3.0
-
-PROMPT (nusxa oling):
-
-Fashion editorial video, beautiful model wearing an elegant outfit, walking confidently through an urban street, golden hour lighting, slow motion 60fps, cinematic camera following the model, soft wind moving the fabric naturally, vibrant city background slightly blurred, professional fashion photography style, model looking confidently at camera with a subtle smile, hair flowing naturally, clothes moving with movement, color graded for Instagram aesthetic, 4K quality, smooth camera tracking shot, 10 seconds duration.
-
-QANDAY:
-1. Kling.ai ga kiring
-2. Image-to-video tanlang
-3. Kiyim rasmini yuklang
-4. Promptni qo'ying
-5. Sifat HD, davomiyligi 10 soniya
-
-Natija: reklama agentligi darajasidagi video — Instagram, TikTok uchun.
-
-Kichik do'kon endi katta brend kabi reklama qila oladi.""",
-
-    # ---- День 9: AI — новая грамотность (факты обновлены) ----
-    """🧠 AI — yangi savod 2026 yilda
-
-Hurmatli do'stlar, e'tibor bering bu fikrga.
-
-100 yil oldin: o'qish-yozishni bilmagan qiynalardi.
-50 yil oldin: kompyuterni bilmagan yaxshi ish topa olmadi.
-Bugun: AI bilan ishlashni bilmagan ortda qoladi.
-
-Statistika:
-
-📊 ChatGPT — haftada 900 mln foydalanuvchi
-📊 Microsoft 2025-yilda 15 000+ ish o'rnini qisqartirdi, AI'ga sarmoya yo'naltirib
-📊 Klarna AI'si 700 operator ishini bajardi — lekin keyin sifat uchun yana odamlarni ishga oldi
-
-Muhim xulosa: AI odamni butunlay almashtirmaydi — u kuchaytiradi. Eng yaxshi natija: AI + odam.
-
-Nima qilish:
-
-✅ Kuniga 30 daqiqa AI bilan
-✅ Bittasini chuqur o'rganing (ChatGPT yoki Claude)
-✅ O'z ishingizga moslang
-
-Bugun boshlang. Erta kech bo'ladi.""",
-
-    # ---- День 10: PROMPT Hollywood портрет ----
-    """🎥 PROMPT: Kinematografik portret Hollywood uslubida
-
-Hurmatli do'stlar, yakuniy bonus — Hollywood uslubidagi portret.
-
-NIMA KERAK:
-1. Sizning fotosurat
-2. Nano Banana 2
-
-PROMPT (nusxa oling):
-
-Cinematic close-up portrait in Hollywood film style, professional lighting setup with key light from the side, soft fill light, dramatic shadows on the opposite side, shot on a cinema camera, 85mm lens, shallow depth of field, photorealistic skin texture with natural pores visible, intense gaze, subtle expression, warm cinematic color grading, atmospheric haze, slight film grain, professional cinematography, magazine editorial quality, sharp focus on the eyes, hair detailed with light catching individual strands, neck and shoulders visible, blurred background with cinematic bokeh, ultra-realistic, no CGI gloss, natural human imperfections preserved, museum-quality portrait photography.
-
-QANDAY:
-1. Nano Banana 2 ga kiring
-2. Rasm yuklang
-3. Promptni qo'ying
-4. Generatsiya, 2-3 marta sinang
-
-Natija: LinkedIn, sayt, portfolio uchun professional portret.""",
+Shu bilan mini-darslar tugadi. Chuqurroq bilim — oldinda!""",
 ]
 
 
 # ============================================
-# КАРТИНКА ЧЕРЕЗ UNSPLASH
+# ПРОМПТЫ — 16 штук (вечер обычных дней)
+# ============================================
+PROMPT_POSTS = [
+    """🎨 PROMPT: Kinematografik avatar (Nano Banana 2)
+
+Ikkita rasm kerak: yuzingiz + referens uslub.
+
+PROMPT (nusxa oling):
+Use Image 1 as face reference (identity, features, skin tone). Use Image 2 as scene and lighting reference. Replace the face in Image 2 with the person from Image 1, keep identity and natural skin texture, match lighting and color grading. Ultra-realistic, cinematic lighting, sharp focus, professional photography.
+
+Yuz + referens yuklang, promptni qo'ying, generatsiya.""",
+
+    """🍽 PROMPT: Restoran taomi (Nano Banana 2)
+
+PROMPT (nusxa oling):
+Professional food photography of [taom nomi], close-up macro shot, steam rising, glistening textures, golden warm side lighting, dark moody background, shallow depth of field, appetizing rich colors, food magazine style, ultra-detailed, photorealistic, no text.
+
+[taom nomi] o'rniga yozing: osh, manti, lag'mon, somsa.
+Menyu va reklama uchun zo'r.""",
+
+    """👗 PROMPT: Kiyim brendi videosi (Kling 3.0)
+
+PROMPT (nusxa oling):
+Fashion editorial video, model wearing an elegant outfit, walking confidently through an urban street, golden hour light, slow motion 60fps, cinematic tracking shot, fabric moving naturally, Instagram color grade, 4K, 10 seconds.
+
+Kiyim rasmini yuklang, image-to-video, HD.
+Kichik do'kon ham katta brend kabi reklama qiladi.""",
+
+    """🚗 PROMPT: Avtomobil reklamasi (Nano Banana 2)
+
+PROMPT (nusxa oling):
+Cinematic car advertising shot, [mashina modeli/rangi], parked on a wet city street at night, neon reflections on the body, dramatic rim lighting, low angle, ultra-glossy paint, sharp reflections, professional automotive photography, ultra-realistic, high detail.
+
+Avto-salon va e'lonlar uchun.""",
+
+    """💍 PROMPT: Zargarlik / aksessuar (Nano Banana 2)
+
+PROMPT (nusxa oling):
+Luxury jewelry product photography, a gold ring on a soft silk surface, macro close-up, sparkling diamond, soft studio lighting with gentle reflections, elegant dark background, ultra-sharp focus, premium advertising look, photorealistic, high detail.
+
+Zargarlik do'konlari uchun premium ko'rinish.""",
+
+    """🏠 PROMPT: Kvartira interyeri (ko'chmas mulk)
+
+PROMPT (nusxa oling):
+Professional real-estate interior photography, modern bright living room, natural daylight through large windows, wide-angle 16mm, clean minimal design, soft shadows, realistic materials, warm cozy atmosphere, high detail, photorealistic, no people.
+
+Ijara va sotuv e'lonlari uchun.""",
+
+    """🔷 PROMPT: Logotip / emblema
+
+PROMPT (nusxa oling):
+Minimalist modern logo, [biznes sohasi], clean flat vector style, simple geometric emblem, balanced composition, 2-3 color palette, professional, on a transparent background, high quality, no extra text.
+
+Matnni keyin Canva'da qo'shing — shunda toza chiqadi.""",
+
+    """💄 PROMPT: Kosmetika mahsuloti (Nano Banana 2)
+
+PROMPT (nusxa oling):
+Cosmetic product photography, a cream jar on a marble surface with soft petals around, gentle diffused lighting, pastel tones, elegant minimal composition, water droplets for freshness, premium beauty-brand style, ultra-detailed, photorealistic.
+
+Kosmetika va parvarish brendlari uchun.""",
+
+    """☕ PROMPT: Kofe / kafe kadri (Nano Banana 2)
+
+PROMPT (nusxa oling):
+Cozy coffee shop photography, a latte with latte art on a wooden table, warm morning sunlight, shallow depth of field, steam rising, blurred cafe background, inviting atmosphere, photorealistic, high detail.
+
+Kafe va restoranlar uchun ajoyib kontent.""",
+
+    """🛍 PROMPT: E-commerce oq fon mahsulot
+
+PROMPT (nusxa oling):
+Clean e-commerce product photo, [mahsulot], centered on a pure white seamless background, even soft studio lighting, no shadows, sharp focus, true colors, catalog style, ultra-detailed, photorealistic.
+
+Onlayn do'kon va marketplace (Uzum, Yandex) uchun.""",
+
+    """👕 PROMPT: Logo mockup (futbolka / kружка)
+
+PROMPT (nusxa oling):
+Realistic product mockup, a plain t-shirt on a neutral studio background, soft even lighting, empty flat surface ready for a logo, sharp focus, true colors, professional mockup style, photorealistic.
+
+Logoni keyin ustiga qo'ying — mijozga ko'rsatish uchun zo'r.""",
+
+    """🎞 PROMPT: Retro / vintage portret (Nano Banana 2)
+
+PROMPT (nusxa oling):
+Vintage 90s film portrait, warm faded tones, soft grain, natural window light, nostalgic mood, analog film aesthetic, slightly desaturated colors, authentic retro look, photorealistic skin texture.
+
+Instagram estetikasi uchun trend uslub.""",
+
+    """🔍 PROMPT: Mahsulot makro detali (Nano Banana 2)
+
+PROMPT (nusxa oling):
+Extreme macro product shot, close-up on the texture and material detail of [mahsulot], dramatic directional lighting, crisp micro-detail, shallow depth of field, premium advertising style, ultra-realistic, high resolution.
+
+Sifatni ko'rsatuvchi reklama uchun.""",
+
+    """🏞 PROMPT: Turizm / manzara (sayohat biznesi)
+
+PROMPT (nusxa oling):
+Breathtaking travel photography, [joy nomi], golden hour, dramatic sky, vibrant natural colors, wide cinematic composition, crisp detail, professional landscape photography, ultra-realistic, high resolution.
+
+Sayohat agentliklari va bloglar uchun.""",
+
+    """📢 PROMPT: Poster / afisha foni (Nano Banana 2)
+
+PROMPT (nusxa oling):
+Modern event poster background, bold vibrant gradient, dynamic abstract shapes, clean composition with empty space for text, professional graphic-design style, high resolution, eye-catching.
+
+Matnni Canva'da ustiga yozing.""",
+
+    """📸 PROMPT: Instagram lifestyle foto (Nano Banana 2)
+
+PROMPT (nusxa oling):
+Aesthetic lifestyle photo, a person sitting in a stylish minimalist cafe, soft natural light, muted warm color grade, candid pose, shallow depth of field, trendy Instagram aesthetic, ultra-realistic, editorial finish.
+
+Blogerlar va shaxsiy brend uchun.""",
+]
+
+
+# ============================================
+# БЕСПЛАТНЫЕ РЕСУРСЫ — 4 штуки (вечер дней 5/10/15/20)
+# В каждом — оговорка про меняющиеся лимиты.
+# ============================================
+FREE_LIMIT_NOTE = "\n\n⚠️ Bepul limitlar tez-tez o'zgaradi — bugun bor, ertaga kamayishi mumkin. Aniq holatni saytda tekshiring."
+
+FREE_RESOURCE_POSTS = [
+    # день 5
+    """🆓 BEPUL rasm yaratish vositalari
+
+Hurmatli do'stlar, rasm yasash uchun pul shart emas. Mana bepul boshlash mumkin bo'lganlar:
+
+✅ Google Gemini — bepul, sifatli, kunlik limit bilan
+✅ Leonardo.ai — har kuni bepul kredit beradi
+✅ Krea — kunlik bepul kredit, karta shart emas
+✅ Canva — bepul AI-vositalar (matn-rasm, fon olib tashlash)
+
+Maslahat: bittadan boshlang, qaysi biri yoqishini sinang.""" + FREE_LIMIT_NOTE,
+
+    # день 10
+    """🆓 BEPUL video yaratish modellari
+
+Hurmatli do'stlar, AI-video ham bepul sinash mumkin:
+
+✅ Kling — har kuni bepul kredit (bir necha qisqa video uchun)
+✅ Hailuo — kunlik bepul generatsiyalar
+✅ Luma Dream Machine — oyiga bepul kredit
+
+Diqqat: bepul tariflarda ko'pincha suv belgisi (watermark) bo'ladi, tijorat uchun pullik tarif kerak.""" + FREE_LIMIT_NOTE,
+
+    # день 15
+    """🆓 BEPUL foto yaxshilash (upscale) vositalari
+
+Hurmatli do'stlar, xira yoki eski rasmni bepul tiniq qilish mumkin:
+
+✅ Krea — upscale bo'limi, kunlik bepul kredit bilan
+✅ Canva — rasm sifatini oshirish vositalari
+✅ remove.bg — fonni bir zumda olib tashlash (bepul)
+
+Kimga kerak: do'kon, ko'chmas mulk, eski oilaviy suratlar.""" + FREE_LIMIT_NOTE,
+
+    # день 20
+    """🆓 BEPUL AI-yordamchilar (matn, g'oya, tarjima)
+
+Hurmatli do'stlar, kundalik ish uchun bepul yordamchilar:
+
+✅ ChatGPT — bepul versiya, kunlik ish uchun yetadi
+✅ Claude — uzun matn va tahlil uchun kuchli
+✅ Google Gemini — bepul, katta kontekst bilan
+✅ Perplexity — manba bilan qidiruv va tadqiqot uchun
+
+Maslahat: bittasini tanlab, chuqur o'rganing — shunda tezroq natija.""" + FREE_LIMIT_NOTE,
+]
+
+
+# ============================================
+# UNSPLASH
 # ============================================
 IMAGE_QUERIES = ["artificial intelligence", "ai technology", "future technology", "neural network", "digital art", "creative technology"]
 
@@ -600,10 +578,34 @@ def get_image_url():
 
 
 # ============================================
+# ВЫБОР ПОСТА ПО ДНЮ ЦИКЛА
+# ============================================
+def pick_morning(day: int) -> str:
+    """Утро: обучение в дни 5/10/15/20, иначе новость."""
+    if day in LESSON_DAYS:
+        # день 5->0, 10->1, 15->2, 20->3
+        idx = sorted(LESSON_DAYS).index(day)
+        return LESSON_POSTS[idx]
+    # обычные дни -> новости по порядку (пропуская дни-уроки)
+    normal_days = [d for d in range(1, CYCLE_DAYS + 1) if d not in LESSON_DAYS]
+    idx = normal_days.index(day) % len(NEWS_POSTS)
+    return NEWS_POSTS[idx]
+
+
+def pick_evening(day: int) -> str:
+    """Вечер: бесплатные ресурсы в дни 5/10/15/20, иначе промпт."""
+    if day in LESSON_DAYS:
+        idx = sorted(LESSON_DAYS).index(day)
+        return FREE_RESOURCE_POSTS[idx]
+    normal_days = [d for d in range(1, CYCLE_DAYS + 1) if d not in LESSON_DAYS]
+    idx = normal_days.index(day) % len(PROMPT_POSTS)
+    return PROMPT_POSTS[idx]
+
+
+# ============================================
 # ПУБЛИКАЦИЯ
 # ============================================
-async def publish_post(post_text: str):
-    """Короткий пост -> с картинкой (caption). Длинный (промпт) -> отдельным текстом, БЕЗ обрезки."""
+async def publish(post_text: str):
     full_text = post_text + get_cta() + "\n\n" + get_hashtags()
     try:
         if len(full_text) <= TELEGRAM_CAPTION_LIMIT:
@@ -612,7 +614,6 @@ async def publish_post(post_text: str):
                 await bot.send_photo(chat_id=CHANNEL_USERNAME, photo=image_url, caption=full_text)
                 logger.info("Опубликовано с картинкой (%s симв.)", len(full_text))
                 return
-        # длинный пост или нет картинки -> обычное сообщение (до 4096)
         await bot.send_message(chat_id=CHANNEL_USERNAME, text=full_text, disable_web_page_preview=False)
         logger.info("Опубликовано текстом (%s симв.)", len(full_text))
     except Exception as e:
@@ -620,49 +621,20 @@ async def publish_post(post_text: str):
 
 
 async def publish_morning():
-    idx = cycle_index()
-    logger.info("📰 Утренний пост, день цикла #%s", idx + 1)
-    await publish_post(MORNING_POSTS[idx])
+    day = cycle_day()
+    logger.info("📰 Утро, день цикла %s", day)
+    await publish(pick_morning(day))
 
 
 async def publish_evening():
-    idx = cycle_index()
-    logger.info("🎨 Вечерний пост, день цикла #%s", idx + 1)
-    await publish_post(EVENING_POSTS[idx])
+    day = cycle_day()
+    logger.info("🎨 Вечер, день цикла %s", day)
+    await publish(pick_evening(day))
 
 
-# ============================================
-# ОПРОСЫ — Пн/Ср/Пт 20:00 Ташкент (15:00 UTC)
-# ============================================
-POLLS = [
-    {"question": "Qaysi AI-rasm modelidan foydalanasiz? 🎨", "options": ["MidJourney", "Nano Banana 2", "Flux", "Hech qaysi"]},
-    {"question": "AI bilan kuniga qancha ishlaysiz? ⏰", "options": ["1 soatdan kam", "1-3 soat", "3-5 soat", "5+ soat"]},
-    {"question": "Qaysi AI-video model qiziq? 🎬", "options": ["Kling 3.0", "Runway", "Veo 3.1", "Pika"]},
-    {"question": "AI ishingizni o'zgartirdimi? 💼", "options": ["Ha, juda", "Ozgina", "Hozircha yo'q", "Sinab ko'ryapman"]},
-    {"question": "Yangi AI-vositalarni qanchalik kuzatasiz? 👀", "options": ["Har kuni", "Haftada bir", "Oyiga bir", "Tasodifan"]},
-]
-
-
-async def publish_poll():
-    poll = random.choice(POLLS)
-    try:
-        await bot.send_poll(
-            chat_id=CHANNEL_USERNAME,
-            question=poll["question"],
-            options=poll["options"],
-            is_anonymous=True,
-        )
-        logger.info("Опрос опубликован")
-    except Exception as e:
-        logger.error("Ошибка опроса: %s", e)
-
-
-# ============================================
-# KEEP-ALIVE
-# ============================================
 async def keep_alive_ping():
-    tashkent = timezone(timedelta(hours=5))
-    logger.info("💚 Keep-alive — Ташкент %s", datetime.now(tashkent).strftime("%H:%M"))
+    tz = timezone(timedelta(hours=5))
+    logger.info("💚 Keep-alive — Ташкент %s", datetime.now(tz).strftime("%H:%M"))
 
 
 # ============================================
@@ -679,12 +651,11 @@ async def main():
     scheduler = AsyncIOScheduler(timezone="UTC")
     scheduler.add_job(publish_morning, CronTrigger(hour=5, minute=0, timezone="UTC"), id="morning", replace_existing=True)
     scheduler.add_job(publish_evening, CronTrigger(hour=14, minute=0, timezone="UTC"), id="evening", replace_existing=True)
-    scheduler.add_job(publish_poll, CronTrigger(day_of_week="mon,wed,fri", hour=15, minute=0, timezone="UTC"), id="poll", replace_existing=True)
     scheduler.add_job(keep_alive_ping, IntervalTrigger(minutes=10), id="keep_alive", replace_existing=True)
     scheduler.start()
 
-    logger.info("🚀 Бот v4.0 запущен. Сегодня день цикла #%s", cycle_index() + 1)
-    logger.info("📅 10:00 (новости) и 19:00 (промпты), опросы Пн/Ср/Пт 20:00 (Ташкент)")
+    logger.info("🚀 Бот v5.0 запущен. Сегодня день цикла %s", cycle_day())
+    logger.info("📅 10:00 (утро) и 19:00 (вечер), дни 5/10/15/20 — обучение + бесплатные ресурсы")
 
     while True:
         await asyncio.sleep(3600)
